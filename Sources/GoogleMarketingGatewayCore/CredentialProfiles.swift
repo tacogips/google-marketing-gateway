@@ -163,15 +163,26 @@ public struct CredentialProfileConfiguration: Codable, Equatable, Sendable {
       guard Self.isSafeProfileID(profile.id), ids.insert(profile.id).inserted else {
         throw configurationError("Credential profile id is invalid or duplicated")
       }
-      guard profile.capability == .reader else { throw configurationError("Credential profiles must use reader capability") }
       let configuredScopes = Set(profile.oauthScopes)
-      let allowedScopes = Set(profile.product.readerOAuthScopes)
-      guard !configuredScopes.isEmpty, configuredScopes.count == profile.oauthScopes.count,
-        configuredScopes.isSubset(of: allowedScopes) else {
-        throw configurationError("Credential profile OAuth scopes do not match its product reader scopes")
+      guard !configuredScopes.isEmpty, configuredScopes.count == profile.oauthScopes.count else {
+        throw configurationError("Credential profile OAuth scopes are invalid")
       }
-      if profile.product == .googleAds || profile.product == .analyticsData || profile.product == .searchConsole {
-        guard configuredScopes == allowedScopes else { throw configurationError("Credential profile OAuth scope bundle is not exact") }
+      switch profile.capability {
+      case .reader:
+        let allowedScopes = Set(profile.product.readerOAuthScopes)
+        guard configuredScopes.isSubset(of: allowedScopes) else {
+          throw configurationError("Credential profile OAuth scopes do not match its product reader scopes")
+        }
+        if profile.product == .googleAds || profile.product == .analyticsData || profile.product == .searchConsole {
+          guard configuredScopes == allowedScopes else { throw configurationError("Credential profile OAuth scope bundle is not exact") }
+        }
+      case .writer:
+        guard profile.product == .admob,
+          configuredScopes == ["https://www.googleapis.com/auth/admob.monetization"] else {
+          throw configurationError("Only the exact AdMob Native writer profile is supported")
+        }
+      case .admin:
+        throw configurationError("Credential profiles must not use admin capability")
       }
       guard Self.isSafeEnvironmentVariable(profile.accessTokenEnvironmentVariable) else {
         throw configurationError("Access-token environment-variable name is unsafe")

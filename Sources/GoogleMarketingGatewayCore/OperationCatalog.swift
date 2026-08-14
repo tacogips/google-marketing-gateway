@@ -40,6 +40,10 @@ public struct OperationDescriptor: Codable, Equatable, Sendable {
   public let requestBodyPolicy: String
   public let responsePolicy: String
   public let verification: String
+  public let confirmationPolicy: String
+  public let duplicateRiskHorizon: String
+  public let reconciliationPolicy: String
+  public let planPayloadPolicy: String
 
   public init(
     id: String,
@@ -56,7 +60,11 @@ public struct OperationDescriptor: Codable, Equatable, Sendable {
     spendRisk: String = "none",
     requestBodyPolicy: String = "none",
     responsePolicy: String = "json",
-    verification: String = "deterministic-tests"
+    verification: String = "deterministic-tests",
+    confirmationPolicy: String = "none",
+    duplicateRiskHorizon: String = "none",
+    reconciliationPolicy: String = "not-applicable",
+    planPayloadPolicy: String = "none"
   ) {
     self.id = id
     self.product = product
@@ -73,6 +81,10 @@ public struct OperationDescriptor: Codable, Equatable, Sendable {
     self.requestBodyPolicy = requestBodyPolicy
     self.responsePolicy = responsePolicy
     self.verification = verification
+    self.confirmationPolicy = confirmationPolicy
+    self.duplicateRiskHorizon = duplicateRiskHorizon
+    self.reconciliationPolicy = reconciliationPolicy
+    self.planPayloadPolicy = planPayloadPolicy
   }
 
   public var isImplemented: Bool { availability == "implemented" }
@@ -80,7 +92,9 @@ public struct OperationDescriptor: Codable, Equatable, Sendable {
   public func validateForCatalog() throws {
     guard !id.isEmpty, !apiFamily.isEmpty, !apiVersion.isEmpty, !providerMethod.isEmpty,
       !availability.isEmpty, !stability.isEmpty, !requestKind.isEmpty, !spendRisk.isEmpty,
-      !requestBodyPolicy.isEmpty, !responsePolicy.isEmpty, !verification.isEmpty else {
+      !requestBodyPolicy.isEmpty, !responsePolicy.isEmpty, !verification.isEmpty,
+      !confirmationPolicy.isEmpty, !duplicateRiskHorizon.isEmpty,
+      !reconciliationPolicy.isEmpty, !planPayloadPolicy.isEmpty else {
       throw GatewayError("Operation descriptor metadata is incomplete", code: .invalidConfiguration, exitCode: 2)
     }
     guard origin.hasPrefix("https://"), !origin.contains("*"),
@@ -216,6 +230,25 @@ public enum OperationCatalog {
       product: .admob,
       capability: .reader,
       oauthScopes: ["https://www.googleapis.com/auth/admob.readonly"]
+    ),
+    OperationDescriptor(
+      id: "admob.accounts.adUnits.createNative",
+      product: .admob,
+      capability: .writer,
+      oauthScopes: ["https://www.googleapis.com/auth/admob.monetization"],
+      availability: "preview-only-durable-apply-pending",
+      apiVersion: "v1beta",
+      stability: "beta-limited-access",
+      providerMethod: "accounts.adUnits.create",
+      requestKind: "mutate",
+      spendRisk: "indirect-serving",
+      requestBodyPolicy: "typed-native-ad-unit-only",
+      responsePolicy: "bounded-json",
+      verification: "deterministic-no-live-mutation",
+      confirmationPolicy: "apply-unavailable",
+      duplicateRiskHorizon: "unbounded-after-ambiguous-transmission",
+      reconciliationPolicy: "apply-unavailable-until-reviewed-durable-state",
+      planPayloadPolicy: "not-persisted; zero-network-preview-only"
     ),
     OperationDescriptor(
       id: "admob.accounts.networkReport.generate",

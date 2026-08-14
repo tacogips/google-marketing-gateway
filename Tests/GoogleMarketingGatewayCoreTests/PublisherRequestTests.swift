@@ -83,6 +83,37 @@ import Testing
   #expect(adUnits.url?.path == "/v1/accounts/pub-123/adUnits")
 }
 
+@Test func nativeAdUnitCreateUsesFixedV1betaPOSTAndExactBody() throws {
+  let input = try AdMobNativeAdUnitInput(
+    account: "accounts/pub-9876543210987654",
+    appID: "ca-app-pub-9876543210987654~0123456789",
+    displayName: "Example Native",
+    adTypes: [.video, .richMedia]
+  )
+  let request = try PublisherRequests.admobNativeAdUnitCreate(input: input, accessToken: "token")
+  let body = try #require(request.httpBody)
+  let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+  #expect(request.httpMethod == "POST")
+  #expect(request.url?.absoluteString == "https://admob.googleapis.com/v1beta/accounts/pub-9876543210987654/adUnits")
+  #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+  #expect(Set(object.keys) == ["appId", "displayName", "adFormat", "adTypes"])
+  #expect(object["adFormat"] as? String == "NATIVE")
+  #expect(object["adTypes"] as? [String] == ["RICH_MEDIA", "VIDEO"])
+}
+
+@Test func nativeAdUnitCreateRejectsCrossAccountAndDuplicateTypes() {
+  #expect(throws: GatewayError.self) {
+    _ = try AdMobNativeAdUnitInput(
+      account: "accounts/pub-1", appID: "ca-app-pub-2~3", displayName: "Native", adTypes: [.richMedia]
+    )
+  }
+  #expect(throws: GatewayError.self) {
+    _ = try AdMobNativeAdUnitInput(
+      account: "accounts/pub-1", appID: "ca-app-pub-1~3", displayName: "Native", adTypes: [.richMedia, .richMedia]
+    )
+  }
+}
+
 @Test func admobReportPOSTBodiesUseOfficialCamelCaseFields() throws {
   let spec = try AdMobReportSpec(
     dateRange: try reportDateRange(),

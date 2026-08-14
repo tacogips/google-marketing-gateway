@@ -34,6 +34,22 @@ func profileValidationRejectsUnsafeConfigurations(_ profilesJSON: String) {
   }
 }
 
+@Test func profileConfigurationAcceptsOnlyExactAdMobWriterScope() throws {
+  let writer = profileJSON(
+    id: "admob-writer", product: "admob", capability: "writer",
+    scopes: ["https://www.googleapis.com/auth/admob.monetization"], tokenEnvironment: "ADMOB_WRITER_TOKEN"
+  )
+  let configuration = try CredentialProfileConfiguration.decode(Data("{\"profiles\":[\(writer)]}".utf8))
+  #expect(try configuration.profile(id: "admob-writer").capability == .writer)
+  let mixed = profileJSON(
+    id: "bad-writer", product: "admob", capability: "writer",
+    scopes: ["https://www.googleapis.com/auth/admob.monetization", admobScope], tokenEnvironment: "ADMOB_WRITER_TOKEN"
+  )
+  #expect(throws: GatewayError.self) {
+    _ = try CredentialProfileConfiguration.decode(Data("{\"profiles\":[\(mixed)]}".utf8))
+  }
+}
+
 @Test func profileLoadResolvesOAuthPathsRelativeToConfigAndRejectsCollisions() throws {
   let root = FileManager.default.temporaryDirectory.appendingPathComponent("profile-resolution-\(UUID().uuidString)", isDirectory: true)
   try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)

@@ -147,6 +147,28 @@ public enum PublisherRequests {
     )
   }
 
+  public static func admobNativeAdUnitCreate(
+    input: AdMobNativeAdUnitInput,
+    accessToken: String
+  ) throws -> URLRequest {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let body: Data
+    do {
+      body = try encoder.encode(AdMobNativeAdUnitCreateBody(input: input))
+    } catch {
+      throw GatewayError("Unable to encode AdMob Native ad-unit request", code: .invalidArgument, exitCode: 2)
+    }
+    return try request(
+      origin: "https://admob.googleapis.com",
+      path: "/v1beta/\(input.account)/adUnits",
+      accessToken: accessToken,
+      query: [],
+      method: "POST",
+      body: body
+    )
+  }
+
   public static func admobNetworkReport(
     account: String,
     reportSpec: AdMobReportSpec,

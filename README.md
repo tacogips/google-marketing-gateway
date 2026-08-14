@@ -31,9 +31,14 @@ The publisher-reader foundation provides typed REST requests for:
 - Search Console Sites, Search Analytics, sitemap reads, and URL Inspection
   through its fixed official Webmasters v3 and URL Inspection v1 origins
 
-Writer and admin mutation allowlists intentionally remain empty until each
-operation receives an operation-specific scope, concurrency, and recovery
-review. Google Trends is represented in the catalog as an official alpha API
+The writer exposes a zero-network preview for the Native-only AdMob v1beta
+`accounts.adUnits.create` request through `admob adunits create-native plan`.
+It validates the exact `https://www.googleapis.com/auth/admob.monetization`
+writer profile and constructs the narrowly typed request, but live apply stays
+fail-closed until the reviewed durable anti-replay state is implemented. The
+API has limited access and may return 403 without entitlement. Update and
+delete are unavailable because the public API does not expose them. All other
+writer and admin mutation allowlists remain empty. Google Trends is represented in the catalog as an official alpha API
 requiring allowlist access; this project does not scrape `trends.google.com` or
 use unofficial endpoints.
 
@@ -52,6 +57,26 @@ Inspect the current inventory and required OAuth scopes:
 ```bash
 swift run google-marketing-gateway-reader catalog
 ```
+
+### AdMob Native ad-unit creation
+
+Use a product-isolated writer profile with only the monetization scope. The
+plan command validates locally and does not contact Google:
+
+```bash
+ADMOB_WRITER_PLAN_TEST_TOKEN=fixture-token-not-a-secret \
+swift run google-marketing-gateway-writer admob adunits create-native plan \
+  --account accounts/pub-9876543210987654 \
+  --app-id ca-app-pub-9876543210987654~0123456789 \
+  --display-name "Local verification only" \
+  --ad-types RICH_MEDIA,VIDEO \
+  --profile fixture-admob-writer \
+  --config Tests/GoogleMarketingGatewayCoreTests/Fixtures/admob-writer-plan.json
+```
+
+The preview deliberately emits no reusable plan token and cannot be applied.
+Native layout, rendering, AdChoices, click and impression handling, and SDK
+test-ad behavior remain mobile-app concerns.
 
 Create a JSON config containing product-isolated reader profiles. Config stores
 only environment-variable names, never token values:

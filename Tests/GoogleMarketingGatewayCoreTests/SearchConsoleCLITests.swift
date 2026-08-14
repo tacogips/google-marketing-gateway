@@ -102,7 +102,11 @@ import Testing
     for route in routes { #expect((await cli.run(arguments: route + common, environment: ["SC_TOKEN": "token"])).exitCode == 2) }
     #expect(resolver.calls == 0)
     #expect(transport.requests.isEmpty)
-    #expect(cli.usage.contains("No mutations enabled"))
+    if mode == .writer {
+      #expect(cli.usage.contains("admob adunits create-native plan"))
+    } else {
+      #expect(cli.usage.contains("No mutations enabled"))
+    }
   }
 }
 
@@ -114,7 +118,11 @@ import Testing
     #expect(operation.oauthScopes == ["https://www.googleapis.com/auth/webmasters.readonly"])
     #expect(operation.availability == "implemented")
   }
-  #expect(OperationCatalog.implementedOperations.filter { $0.capability != .reader }.isEmpty)
+  let writerOperations = OperationCatalog.implementedOperations.filter { $0.capability == .writer }
+  #expect(writerOperations.isEmpty)
+  #expect(OperationCatalog.operations.contains {
+    $0.id == "admob.accounts.adUnits.createNative" && $0.availability == "preview-only-durable-apply-pending"
+  })
   let usage = GoogleMarketingGatewayCLI(mode: .reader).usage
   for command in [
     "search-console sites list",

@@ -5,6 +5,7 @@ public struct GoogleMarketingGatewayCLI: Sendable {
   private let client: GoogleRESTClient
   private let credentialResolver: any ReaderCredentialResolving
   private let authManager: any ReaderAuthManaging
+  private let writerCommand: AdMobNativeWriterCommand
 
   public init(
     mode: GatewayMode,
@@ -12,10 +13,12 @@ public struct GoogleMarketingGatewayCLI: Sendable {
     credentialResolver: any ReaderCredentialResolving = ReaderCredentialResolver(refresher: OAuthClient()),
     authManager: any ReaderAuthManaging = ReaderAuthService()
   ) {
+    let client = GoogleRESTClient(transport: transport)
     self.mode = mode
-    self.client = GoogleRESTClient(transport: transport)
+    self.client = client
     self.credentialResolver = credentialResolver
     self.authManager = authManager
+    self.writerCommand = AdMobNativeWriterCommand()
   }
 
   public func run(
@@ -31,6 +34,19 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       }
       if arguments == ["catalog"] {
         return GatewayCommandResult(exitCode: 0, stdout: try OperationCatalog.encoded())
+      }
+      if mode == .writer {
+        guard Array(arguments.prefix(3)) == ["admob", "adunits", "create-native"] else {
+          throw GatewayError(
+            "No writer operation is enabled for this command",
+            code: .forbiddenCapability,
+            exitCode: 2
+          )
+        }
+        return try await writerCommand.run(
+          arguments: arguments,
+          environment: environment
+        )
       }
       guard mode == .reader else {
         throw GatewayError(
@@ -119,7 +135,11 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         lines += operation.oauthScopes.map { "    \($0)" }
       }
     } else {
-      lines.append("  No mutations enabled: the reviewed \(mode.rawValue) allowlist is empty.")
+      if mode == .writer {
+        lines += ["  \(AdMobNativeWriterCommand.usage)", "  All other mutations remain unavailable."]
+      } else {
+        lines.append("  No mutations enabled: the reviewed \(mode.rawValue) allowlist is empty.")
+      }
     }
     return lines.joined(separator: "\n") + "\n"
   }
