@@ -1,0 +1,20 @@
+{
+  "profiles": [
+    {
+      "id": "search-console-environment",
+      "product": "search-console",
+      "capability": "reader",
+      "oauthScopes": ["https://www.googleapis.com/auth/webmasters.readonly"],
+      "accessTokenEnvironmentVariable": "SEARCH_CONSOLE_ACCESS_TOKEN"
+    },
+    {
+      "id": "search-console-installed",
+      "product": "search-console",
+      "capability": "reader",
+      "oauthScopes": ["https://www.googleapis.com/auth/webmasters.readonly"],
+      "accessTokenEnvironmentVariable": "SEARCH_CONSOLE_ACCESS_TOKEN",
+      "oauthClientJSONPath": "client.json",
+      "tokenStorePath": "token.json"
+    }
+  ]
+}

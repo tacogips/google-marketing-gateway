@@ -1,0 +1,12 @@
+{
+  "profiles": [
+    {
+      "id": "ads-reader",
+      "product": "google-ads",
+      "capability": "reader",
+      "oauthScopes": ["https://www.googleapis.com/auth/adwords"],
+      "accessTokenEnvironmentVariable": "GOOGLE_ADS_TEST_ACCESS_TOKEN",
+      "developerTokenEnvironmentVariable": "GOOGLE_ADS_TEST_DEVELOPER_TOKEN"
+    }
+  ]
+}
