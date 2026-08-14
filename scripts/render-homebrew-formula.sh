@@ -67,7 +67,6 @@ main() {
 class GoogleMarketingGateway < Formula
   desc "Product-isolated CLI gateway for Google marketing APIs"
   homepage "https://github.com/tacogips/google-marketing-gateway"
-  version "$version"
   license "MIT"
 
   livecheck do
