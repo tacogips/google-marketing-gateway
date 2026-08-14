@@ -67,9 +67,6 @@ main() {
 class GoogleMarketingGateway < Formula
   desc "Product-isolated CLI gateway for Google marketing APIs"
   homepage "https://github.com/tacogips/google-marketing-gateway"
-  # Keep this explicit: Homebrew API generation has inferred the architecture
-  # suffix as the version on some runners for these platform-specific assets.
-  version "$version"
   license "MIT"
 
   livecheck do
@@ -79,10 +76,10 @@ class GoogleMarketingGateway < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "$release_base_url/$artifact_name-$version-darwin-arm64.tar.gz"
+      url "$release_base_url/$artifact_name-$version-darwin-arm.tar.gz"
       sha256 "$darwin_arm64_sha"
     else
-      url "$release_base_url/$artifact_name-$version-darwin-x64.tar.gz"
+      url "$release_base_url/$artifact_name-$version-darwin-intel.tar.gz"
       sha256 "$darwin_x64_sha"
     end
   end
