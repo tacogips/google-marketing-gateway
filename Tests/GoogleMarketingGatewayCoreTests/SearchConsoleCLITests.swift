@@ -114,7 +114,7 @@ import Testing
     #expect(operation.oauthScopes == ["https://www.googleapis.com/auth/webmasters.readonly"])
     #expect(operation.availability == "implemented")
   }
-  #expect(OperationCatalog.operations.filter { $0.capability != .reader }.isEmpty)
+  #expect(OperationCatalog.implementedOperations.filter { $0.capability != .reader }.isEmpty)
   let usage = GoogleMarketingGatewayCLI(mode: .reader).usage
   for command in [
     "search-console sites list",

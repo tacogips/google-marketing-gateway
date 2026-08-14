@@ -111,6 +111,55 @@ import Testing
   }
 }
 
+@Test func googleAdsAgencyReadRequestsUseGeneratedGAQL() throws {
+  let links = try GoogleAdsRequests.customerClientLinks(
+    customerId: "123",
+    pageToken: "page-token",
+    accessToken: "token",
+    developerToken: "developer",
+    loginCustomerId: "456"
+  )
+  #expect(links.httpMethod == "POST")
+  #expect(links.url?.absoluteString == "https://googleads.googleapis.com/v25/customers/123/googleAds:search")
+  #expect(links.value(forHTTPHeaderField: "login-customer-id") == "456")
+  #expect(try jsonEquals(links, [
+    "query": "SELECT customer_client_link.client_customer, customer_client_link.manager_link_id, customer_client_link.status FROM customer_client_link",
+    "pageToken": "page-token"
+  ]))
+
+  let clients = try GoogleAdsRequests.customerClients(
+    customerId: "123",
+    pageToken: nil,
+    accessToken: "token",
+    developerToken: "developer"
+  )
+  #expect(try jsonEquals(clients, [
+    "query": "SELECT customer_client.client_customer, customer_client.descriptive_name, customer_client.level, customer_client.manager, customer_client.status, customer_client.currency_code, customer_client.time_zone FROM customer_client"
+  ]))
+
+  let users = try GoogleAdsRequests.customerUsers(
+    customerId: "123",
+    pageToken: nil,
+    accessToken: "token",
+    developerToken: "developer"
+  )
+  #expect(try jsonEquals(users, [
+    "query": "SELECT customer_user_access.user_id, customer_user_access.email_address, customer_user_access.access_role, customer_user_access.access_creation_date_time, customer_user_access.inviter_user_email_address FROM customer_user_access"
+  ]))
+}
+
+@Test func googleAdsAgencyReadsRejectInputsBeforeCredentialsMatter() {
+  #expect(throws: GatewayError.self) {
+    _ = try GoogleAdsRequests.customerClientLinks(customerId: "bad", pageToken: nil, accessToken: "token", developerToken: "developer")
+  }
+  #expect(throws: GatewayError.self) {
+    _ = try GoogleAdsRequests.customerClients(customerId: "123", pageToken: "line\nfeed", accessToken: "token", developerToken: "developer")
+  }
+  #expect(throws: GatewayError.self) {
+    _ = try GoogleAdsRequests.customerUsers(customerId: "123", pageToken: nil, accessToken: "token with space", developerToken: "developer")
+  }
+}
+
 @Test func analyticsRejectsGregorianDuplicateAndLimitBoundaries() {
   #expect(throws: GatewayError.self) {
     _ = try AnalyticsDataRequests.reportRequest(metrics: ["activeUsers"], dimensions: [], startDate: "2026-02-30", endDate: "2026-03-01", offset: nil, limit: "1", currencyCode: nil, keepEmptyRows: nil, returnPropertyQuota: nil)

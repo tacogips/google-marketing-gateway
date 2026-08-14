@@ -79,6 +79,9 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         "  auth logout --profile <id> --config <path>",
         "  google-ads accessible-customers list",
         "  google-ads search --customer-id <digits> --query-file <path> [--page-token <token>]",
+        "  google-ads customer-client-links list --customer-id <digits> [--page-token <token>]",
+        "  google-ads customer-clients list --customer-id <digits> [--page-token <token>]",
+        "  google-ads customer-users list --customer-id <digits> [--page-token <token>]",
         "  analytics-data metadata get --property properties/<digits>",
         "  analytics-data reports run --property properties/<digits> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --metrics METRIC[,METRIC]",
         "  analytics-data compatibility check --property properties/<digits> --metrics METRIC[,METRIC]",
@@ -111,7 +114,7 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         "",
         "Implemented operations and accepted OAuth scopes:"
       ]
-      for operation in OperationCatalog.operations where operation.availability == "implemented" {
+      for operation in OperationCatalog.implementedOperations {
         lines.append("  \(operation.id)")
         lines += operation.oauthScopes.map { "    \($0)" }
       }
@@ -202,6 +205,12 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       ("google-ads.accessible-customers.list", .googleAds)
     case ["google-ads", "search", "run"]:
       ("google-ads.search", .googleAds)
+    case ["google-ads", "customer-client-links", "list"]:
+      ("google-ads.customer-client-links.list", .googleAds)
+    case ["google-ads", "customer-clients", "list"]:
+      ("google-ads.customer-clients.list", .googleAds)
+    case ["google-ads", "customer-users", "list"]:
+      ("google-ads.customer-users.list", .googleAds)
     case ["analytics-data", "metadata", "get"]:
       ("analytics-data.metadata.get", .analyticsData)
     case ["analytics-data", "reports", "run"]:
@@ -254,6 +263,10 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       return Set(selection)
     case ["google-ads", "search", "run"]:
       return Set(selection + ["customer-id", "query-file", "page-token"])
+    case ["google-ads", "customer-client-links", "list"],
+         ["google-ads", "customer-clients", "list"],
+         ["google-ads", "customer-users", "list"]:
+      return Set(selection + ["customer-id", "page-token"])
     case ["analytics-data", "metadata", "get"]:
       return Set(selection + ["property"])
     case ["analytics-data", "reports", "run"]:
@@ -367,6 +380,30 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       try GoogleAdsRequests.accessibleCustomers(accessToken: accessToken, developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"), loginCustomerId: loginCustomerId)
     case ["google-ads", "search", "run"]:
       try GoogleAdsRequests.search(customerId: try requiredFlag(flags, "customer-id"), query: try loadGAQL(path: try requiredFlag(flags, "query-file")), pageToken: flags["page-token"], accessToken: accessToken, developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"), loginCustomerId: loginCustomerId)
+    case ["google-ads", "customer-client-links", "list"]:
+      try GoogleAdsRequests.customerClientLinks(
+        customerId: try requiredFlag(flags, "customer-id"),
+        pageToken: flags["page-token"],
+        accessToken: accessToken,
+        developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
+        loginCustomerId: loginCustomerId
+      )
+    case ["google-ads", "customer-clients", "list"]:
+      try GoogleAdsRequests.customerClients(
+        customerId: try requiredFlag(flags, "customer-id"),
+        pageToken: flags["page-token"],
+        accessToken: accessToken,
+        developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
+        loginCustomerId: loginCustomerId
+      )
+    case ["google-ads", "customer-users", "list"]:
+      try GoogleAdsRequests.customerUsers(
+        customerId: try requiredFlag(flags, "customer-id"),
+        pageToken: flags["page-token"],
+        accessToken: accessToken,
+        developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
+        loginCustomerId: loginCustomerId
+      )
     case ["analytics-data", "metadata", "get"]:
       try AnalyticsDataRequests.metadata(property: try requiredFlag(flags, "property"), accessToken: accessToken)
     case ["analytics-data", "reports", "run"]:

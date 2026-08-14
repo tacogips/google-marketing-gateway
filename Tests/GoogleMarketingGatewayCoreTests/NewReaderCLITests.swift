@@ -32,6 +32,12 @@ private final class NewRouteTransport: HTTPTransport, @unchecked Sendable {
   let result = await GoogleMarketingGatewayCLI(mode: .reader, credentialResolver: spy).run(arguments: ["google-ads", "search", "--customer-id", "bad-id", "--query-file", "missing", "--profile", "ads", "--config", config.path])
   #expect(result.exitCode == 2)
   #expect(spy.calls == 0)
+
+  let agency = await GoogleMarketingGatewayCLI(mode: .reader, credentialResolver: spy).run(arguments: [
+    "google-ads", "customer-users", "list", "--customer-id", "bad-id", "--profile", "ads", "--config", config.path
+  ])
+  #expect(agency.exitCode == 2)
+  #expect(spy.calls == 0)
 }
 
 @Test func everyNewReaderRouteDispatches() async throws {
@@ -44,6 +50,9 @@ private final class NewRouteTransport: HTTPTransport, @unchecked Sendable {
   let cases = [
     ["google-ads", "accessible-customers", "list", "--profile", "ads"],
     ["google-ads", "search", "--customer-id", "123", "--query-file", query.path, "--profile", "ads"],
+    ["google-ads", "customer-client-links", "list", "--customer-id", "123", "--page-token", "next", "--profile", "ads"],
+    ["google-ads", "customer-clients", "list", "--customer-id", "123", "--profile", "ads"],
+    ["google-ads", "customer-users", "list", "--customer-id", "123", "--profile", "ads"],
     ["analytics-data", "metadata", "get", "--property", "properties/123", "--profile", "analytics"],
     ["analytics-data", "reports", "run", "--property", "properties/123", "--start-date", "2026-08-01", "--end-date", "2026-08-02", "--metrics", "activeUsers", "--profile", "analytics"],
     ["analytics-data", "compatibility", "check", "--property", "properties/123", "--metrics", "activeUsers", "--profile", "analytics"]
@@ -55,14 +64,20 @@ private final class NewRouteTransport: HTTPTransport, @unchecked Sendable {
   #expect(transport.requests.map { $0.url?.absoluteString } == [
     "https://googleads.googleapis.com/v25/customers:listAccessibleCustomers",
     "https://googleads.googleapis.com/v25/customers/123/googleAds:search",
+    "https://googleads.googleapis.com/v25/customers/123/googleAds:search",
+    "https://googleads.googleapis.com/v25/customers/123/googleAds:search",
+    "https://googleads.googleapis.com/v25/customers/123/googleAds:search",
     "https://analyticsdata.googleapis.com/v1beta/properties/123/metadata",
     "https://analyticsdata.googleapis.com/v1beta/properties/123:runReport",
     "https://analyticsdata.googleapis.com/v1beta/properties/123:checkCompatibility"
   ])
-  #expect(transport.requests.map(\.httpMethod) == ["GET", "POST", "GET", "POST", "POST"])
+  #expect(transport.requests.map(\.httpMethod) == ["GET", "POST", "POST", "POST", "POST", "GET", "POST", "POST"])
   #expect(transport.requests[0].value(forHTTPHeaderField: "developer-token") == "developer")
   #expect(transport.requests[1].value(forHTTPHeaderField: "developer-token") == "developer")
-  #expect(transport.requests[2...].allSatisfy { $0.value(forHTTPHeaderField: "developer-token") == nil })
+  #expect(transport.requests[2].value(forHTTPHeaderField: "developer-token") == "developer")
+  #expect(transport.requests[3].value(forHTTPHeaderField: "developer-token") == "developer")
+  #expect(transport.requests[4].value(forHTTPHeaderField: "developer-token") == "developer")
+  #expect(transport.requests[5...].allSatisfy { $0.value(forHTTPHeaderField: "developer-token") == nil })
 }
 
 @Test func profileMismatchAndUnsafeGAQLDoNotTouchCredentialsOrTransport() async throws {
