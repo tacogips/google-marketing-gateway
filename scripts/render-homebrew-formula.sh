@@ -67,6 +67,9 @@ main() {
 class GoogleMarketingGateway < Formula
   desc "Product-isolated CLI gateway for Google marketing APIs"
   homepage "https://github.com/tacogips/google-marketing-gateway"
+  # Keep this explicit: Homebrew API generation has inferred the architecture
+  # suffix as the version on some runners for these platform-specific assets.
+  version "$version"
   license "MIT"
 
   livecheck do
