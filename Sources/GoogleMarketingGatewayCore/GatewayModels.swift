@@ -3,6 +3,7 @@ import Foundation
 public enum GatewayMode: String, Sendable, Codable, CaseIterable {
   case reader
   case writer
+  case deleter
   case admin
 
   public var executableName: String {

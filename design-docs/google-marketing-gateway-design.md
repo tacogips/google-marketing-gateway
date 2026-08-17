@@ -163,12 +163,13 @@ implementation and verification evidence.
 ### 6.1 Executables
 
 The scaffold's single executable is replaced, after compatibility deprecation,
-by three products that share `GoogleMarketingGatewayCore`:
+by four capability products that share `GoogleMarketingGatewayCore`:
 
 | Executable | GraphQL roots | Local policy |
 |---|---|---|
 | `google-marketing-gateway-reader` | `Query` only | Reject every mutation before resolver dispatch; load read-capable profiles only |
 | `google-marketing-gateway-writer` | `Query` plus allowlisted non-administrative `Mutation` fields | Mutation plan/apply, resource allowlists, and write scopes; cannot publish, alter principals, or perform admin-only operations |
+| `google-marketing-gateway-deleter` | Allowlisted provider removal operations only | Exact resource-name confirmation; cannot create, update, read, publish, alter principals, or change billing |
 | `google-marketing-gateway-admin` | Full explicitly registered schema | Admin scopes and policy; destructive/identity/publish operations require a short-lived plan confirmation token |
 
 HTTP verbs do not determine capability. Report methods that use `POST` remain

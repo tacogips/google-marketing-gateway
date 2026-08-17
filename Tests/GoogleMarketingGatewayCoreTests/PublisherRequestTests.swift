@@ -159,7 +159,7 @@ import Testing
   }
 }
 
-@Test func writerHasNoEnabledMutations() async {
+@Test func writerRejectsUnregisteredMutations() async {
   let result = await GoogleMarketingGatewayCLI(mode: .writer).run(arguments: ["anything"])
   #expect(result.exitCode == 2)
   #expect(result.stderr.contains("FORBIDDEN_CAPABILITY"))

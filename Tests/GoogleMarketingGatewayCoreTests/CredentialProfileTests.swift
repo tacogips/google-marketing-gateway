@@ -50,6 +50,36 @@ func profileValidationRejectsUnsafeConfigurations(_ profilesJSON: String) {
   }
 }
 
+@Test func googleAdsLoginCustomerIdUsesOnlySafeEnvironmentReferences() throws {
+  let valid = """
+  {"profiles":[{
+    "id":"ads","product":"google-ads","capability":"reader",
+    "oauthScopes":["https://www.googleapis.com/auth/adwords"],
+    "accessTokenEnvironmentVariable":"ADS_TOKEN",
+    "developerTokenEnvironmentVariable":"ADS_DEVELOPER",
+    "loginCustomerIdEnvironmentVariable":"GOOGLE_ADS_LOGIN_CUSTOMER_ID"
+  }]}
+  """
+  let configuration = try CredentialProfileConfiguration.decode(Data(valid.utf8))
+  #expect(configuration.profiles[0].loginCustomerIdEnvironmentVariable == "GOOGLE_ADS_LOGIN_CUSTOMER_ID")
+
+  let unsafeReference = valid.replacingOccurrences(
+    of: "GOOGLE_ADS_LOGIN_CUSTOMER_ID",
+    with: "GOOGLE_ADS_LOGIN_CUSTOMER_ID;PRINT_SECRET"
+  )
+  #expect(throws: GatewayError.self) {
+    _ = try CredentialProfileConfiguration.decode(Data(unsafeReference.utf8))
+  }
+
+  let legacyLiteral = valid.replacingOccurrences(
+    of: #""loginCustomerIdEnvironmentVariable":"GOOGLE_ADS_LOGIN_CUSTOMER_ID""#,
+    with: #""loginCustomerId":"3827004490""#
+  )
+  #expect(throws: GatewayError.self) {
+    _ = try CredentialProfileConfiguration.decode(Data(legacyLiteral.utf8))
+  }
+}
+
 @Test func profileLoadResolvesOAuthPathsRelativeToConfigAndRejectsCollisions() throws {
   let root = FileManager.default.temporaryDirectory.appendingPathComponent("profile-resolution-\(UUID().uuidString)", isDirectory: true)
   try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)

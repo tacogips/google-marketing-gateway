@@ -10,6 +10,7 @@ let package = Package(
     .executable(name: "google-marketing-gateway", targets: ["GoogleMarketingGatewayCompatibility"]),
     .executable(name: "google-marketing-gateway-reader", targets: ["GoogleMarketingGatewayReader"]),
     .executable(name: "google-marketing-gateway-writer", targets: ["GoogleMarketingGatewayWriter"]),
+    .executable(name: "google-marketing-gateway-deleter", targets: ["GoogleMarketingGatewayDeleter"]),
     .executable(name: "google-marketing-gateway-admin", targets: ["GoogleMarketingGatewayAdmin"])
   ],
   targets: [
@@ -20,6 +21,7 @@ let package = Package(
     ),
     .executableTarget(name: "GoogleMarketingGatewayReader", dependencies: ["GoogleMarketingGatewayCore"]),
     .executableTarget(name: "GoogleMarketingGatewayWriter", dependencies: ["GoogleMarketingGatewayCore"]),
+    .executableTarget(name: "GoogleMarketingGatewayDeleter", dependencies: ["GoogleMarketingGatewayCore"]),
     .executableTarget(name: "GoogleMarketingGatewayAdmin", dependencies: ["GoogleMarketingGatewayCore"]),
     .testTarget(
       name: "GoogleMarketingGatewayCoreTests",

@@ -18,11 +18,11 @@ import Testing
   #expect(try OperationCatalog.operation(id: "google-ads.customer-client-links.list").isImplemented)
   #expect(try OperationCatalog.operation(id: "google-ads.customer-clients.list").isImplemented)
   #expect(try OperationCatalog.operation(id: "google-ads.customer-users.list").isImplemented)
+  #expect(try OperationCatalog.operation(id: "google-ads.manager-links.link").isImplemented)
+  #expect(try OperationCatalog.operation(id: "google-ads.client-accounts.create").isImplemented)
+  #expect(try OperationCatalog.operation(id: "google-ads.keyword-ideas.generate").isImplemented)
   #expect(throws: GatewayError.self) {
     _ = try OperationCatalog.operation(id: "display-video-360.advertisers.list")
-  }
-  #expect(throws: GatewayError.self) {
-    _ = try OperationCatalog.operation(id: "google-ads.manager-links.mutate")
   }
 }
 
@@ -44,6 +44,22 @@ import Testing
     #expect(descriptor.spendRisk == "none")
     #expect(descriptor.requestBodyPolicy == "provider-generated-gaql")
   }
+}
+
+@Test func googleAdsMutationsHaveSeparatedWriterAndDeleterMetadata() throws {
+  let create = try OperationCatalog.operation(id: "google-ads.search-campaigns.create")
+  #expect(create.capability == .writer)
+  #expect(create.requestKind == "mutate")
+  #expect(create.spendRisk == "ad-spend")
+  let removals = OperationCatalog.implementedOperations.filter {
+    $0.product == .googleAds && $0.requestKind == "delete"
+  }
+  #expect(removals.count == 6)
+  #expect(removals.allSatisfy { $0.capability == .deleter })
+  #expect(removals.allSatisfy { $0.confirmationPolicy == "exact-resource-name-on-apply" })
+  #expect(OperationCatalog.implementedOperations
+    .filter { $0.capability == .writer }
+    .allSatisfy { $0.requestKind != "delete" })
 }
 
 @Test func invalidDescriptorFixturesFailDeterministically() {

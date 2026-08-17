@@ -249,7 +249,7 @@ private struct SearchConsoleRequestExpectation {
     #"{"profiles":[{"id":"search","product":"search-console","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/webmasters.readonly","https://www.googleapis.com/auth/adwords"],"accessTokenEnvironmentVariable":"SC_TOKEN"}]}"#,
     #"{"profiles":[{"id":"search","product":"search-console","capability":"writer","oauthScopes":["https://www.googleapis.com/auth/webmasters.readonly"],"accessTokenEnvironmentVariable":"SC_TOKEN"}]}"#,
     #"{"profiles":[{"id":"search","product":"search-console","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/webmasters.readonly"],"accessTokenEnvironmentVariable":"SC_TOKEN","developerTokenEnvironmentVariable":"ADS_DEV"}]}"#,
-    #"{"profiles":[{"id":"search","product":"search-console","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/webmasters.readonly"],"accessTokenEnvironmentVariable":"SC_TOKEN","loginCustomerId":"123"}]}"#
+    #"{"profiles":[{"id":"search","product":"search-console","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/webmasters.readonly"],"accessTokenEnvironmentVariable":"SC_TOKEN","loginCustomerIdEnvironmentVariable":"ADS_LOGIN"}]}"#
   ]
   for json in invalid { #expect(throws: GatewayError.self) { _ = try CredentialProfileConfiguration.decode(Data(json.utf8)) } }
   let fixture = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/search-console-reader-profiles.json")

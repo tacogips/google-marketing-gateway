@@ -9,7 +9,7 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
   public let oauthClientJSONPath: String?
   public let tokenStorePath: String?
   public let developerTokenEnvironmentVariable: String?
-  public let loginCustomerId: String?
+  public let loginCustomerIdEnvironmentVariable: String?
 
   public init(
     id: String,
@@ -20,7 +20,7 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
     oauthClientJSONPath: String? = nil,
     tokenStorePath: String? = nil,
     developerTokenEnvironmentVariable: String? = nil,
-    loginCustomerId: String? = nil
+    loginCustomerIdEnvironmentVariable: String? = nil
   ) {
     self.id = id
     self.product = product
@@ -30,12 +30,13 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
     self.oauthClientJSONPath = oauthClientJSONPath
     self.tokenStorePath = tokenStorePath
     self.developerTokenEnvironmentVariable = developerTokenEnvironmentVariable
-    self.loginCustomerId = loginCustomerId
+    self.loginCustomerIdEnvironmentVariable = loginCustomerIdEnvironmentVariable
   }
 
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case id, product, capability, oauthScopes, accessTokenEnvironmentVariable
-    case oauthClientJSONPath, tokenStorePath, developerTokenEnvironmentVariable, loginCustomerId
+    case oauthClientJSONPath, tokenStorePath, developerTokenEnvironmentVariable
+    case loginCustomerIdEnvironmentVariable
   }
 
   public init(from decoder: any Decoder) throws {
@@ -54,7 +55,10 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
       oauthClientJSONPath: try container.decodeIfPresent(String.self, forKey: .oauthClientJSONPath),
       tokenStorePath: try container.decodeIfPresent(String.self, forKey: .tokenStorePath),
       developerTokenEnvironmentVariable: try container.decodeIfPresent(String.self, forKey: .developerTokenEnvironmentVariable),
-      loginCustomerId: try container.decodeIfPresent(String.self, forKey: .loginCustomerId)
+      loginCustomerIdEnvironmentVariable: try container.decodeIfPresent(
+        String.self,
+        forKey: .loginCustomerIdEnvironmentVariable
+      )
     )
   }
 }
@@ -123,7 +127,7 @@ public struct CredentialProfileConfiguration: Codable, Equatable, Sendable {
         oauthClientJSONPath: try resolvedPath(profile.oauthClientJSONPath, relativeTo: directory),
         tokenStorePath: try resolvedPath(profile.tokenStorePath, relativeTo: directory),
         developerTokenEnvironmentVariable: profile.developerTokenEnvironmentVariable,
-        loginCustomerId: profile.loginCustomerId
+        loginCustomerIdEnvironmentVariable: profile.loginCustomerIdEnvironmentVariable
       )
     }
     try validateResolvedPaths(profiles: resolvedProfiles, configURL: configURL)
@@ -177,12 +181,23 @@ public struct CredentialProfileConfiguration: Codable, Equatable, Sendable {
           guard configuredScopes == allowedScopes else { throw configurationError("Credential profile OAuth scope bundle is not exact") }
         }
       case .writer:
-        guard profile.product == .admob,
-          configuredScopes == ["https://www.googleapis.com/auth/admob.monetization"] else {
-          throw configurationError("Only the exact AdMob Native writer profile is supported")
+        let isAdMobWriter = profile.product == .admob
+          && configuredScopes == ["https://www.googleapis.com/auth/admob.monetization"]
+        let isGoogleAdsWriter = profile.product == .googleAds
+          && configuredScopes == ["https://www.googleapis.com/auth/adwords"]
+        guard isAdMobWriter || isGoogleAdsWriter else {
+          throw configurationError("Writer profile does not match an implemented product scope")
+        }
+      case .deleter:
+        guard profile.product == .googleAds,
+          configuredScopes == ["https://www.googleapis.com/auth/adwords"] else {
+          throw configurationError("Only the exact Google Ads deleter profile is supported")
         }
       case .admin:
-        throw configurationError("Credential profiles must not use admin capability")
+        guard profile.product == .googleAds,
+          configuredScopes == ["https://www.googleapis.com/auth/adwords"] else {
+          throw configurationError("Only the exact Google Ads admin profile is supported")
+        }
       }
       guard Self.isSafeEnvironmentVariable(profile.accessTokenEnvironmentVariable) else {
         throw configurationError("Access-token environment-variable name is unsafe")
@@ -198,10 +213,12 @@ public struct CredentialProfileConfiguration: Codable, Equatable, Sendable {
         guard let developer = profile.developerTokenEnvironmentVariable, Self.isSafeEnvironmentVariable(developer) else {
           throw configurationError("Google Ads profiles require a developer-token environment-variable reference")
         }
-        if let login = profile.loginCustomerId, !Self.isDigits(login, maximum: 20) {
-          throw configurationError("Google Ads login customer id is invalid")
+        if let loginVariable = profile.loginCustomerIdEnvironmentVariable,
+          !Self.isSafeEnvironmentVariable(loginVariable) {
+          throw configurationError("Google Ads login-customer environment-variable name is unsafe")
         }
-      } else if profile.developerTokenEnvironmentVariable != nil || profile.loginCustomerId != nil {
+      } else if profile.developerTokenEnvironmentVariable != nil
+        || profile.loginCustomerIdEnvironmentVariable != nil {
         throw configurationError("Google Ads fields are not allowed for this product")
       }
     }

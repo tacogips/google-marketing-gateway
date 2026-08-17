@@ -47,7 +47,7 @@ service accounts, live OAuth, and live provider calls are out of scope.
   "oauthClientJSONPath": "credentials/google-desktop-client.json",
   "tokenStorePath": "tokens/ads-reader.json",
   "developerTokenEnvironmentVariable": "GOOGLE_ADS_DEVELOPER_TOKEN",
-  "loginCustomerId": "1234567890"
+  "loginCustomerIdEnvironmentVariable": "GOOGLE_ADS_LOGIN_CUSTOMER_ID"
 }
 ```
 
@@ -98,11 +98,12 @@ require matching product, reader capability, and an accepted operation scope.
 Google Ads profiles must declare a safe uppercase
 `developerTokenEnvironmentVariable`. Its value exists only in the process
 environment and is never decoded from config, accepted as a CLI argument, or
-persisted. Other products reject Ads-only fields. `loginCustomerId` is optional
-and, when present, must be nonempty ASCII digits only; hyphens, whitespace,
-signs, and Unicode digits are invalid. Google Ads operation `--customer-id`
-uses the same rule. Both IDs contain 1...20 digits as a local input-safety
-bound, not a claim about provider allocation length.
+persisted. Other products reject Ads-only fields.
+`loginCustomerIdEnvironmentVariable` is optional and, when present, must be a
+safe uppercase environment-variable name. Its resolved value must contain
+1...20 ASCII digits; hyphens, whitespace, signs, and Unicode digits are
+invalid. Google Ads operation `--customer-id` uses the same value rule. The
+length bound is local input safety, not a claim about provider allocation.
 
 ### 2.3 File safety boundary
 

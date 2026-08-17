@@ -83,7 +83,7 @@ import Testing
   #expect(inspectionJSON == ["inspectionUrl": "https://example.com/page", "siteUrl": "sc-domain:example.com", "languageCode": "en-US"])
 }
 
-@Test func everySearchConsoleRouteIsRejectedByWriterAndAdmin() async throws {
+@Test func everySearchConsoleRouteIsRejectedByMutationClients() async throws {
   let root = try searchConsoleCLITemporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
   let config = try searchConsoleConfig(in: root)
   let query = root.appendingPathComponent("request.json"); try Data(#"{"startDate":"2026-01-01","endDate":"2026-01-02"}"#.utf8).write(to: query)
@@ -96,7 +96,7 @@ import Testing
     ["search-console", "sitemaps", "get", "--site", "sc-domain:example.com", "--feedpath", "https://example.com/sitemap.xml"],
     ["search-console", "url-inspection", "inspect", "--site", "sc-domain:example.com", "--inspection-url", "https://example.com/page"]
   ]
-  for mode in [GatewayMode.writer, .admin] {
+  for mode in [GatewayMode.writer, .deleter, .admin] {
     let resolver = SearchConsoleCredentialSpy(); let transport = SearchConsoleRecordingTransport()
     let cli = GoogleMarketingGatewayCLI(mode: mode, transport: transport, credentialResolver: resolver)
     for route in routes { #expect((await cli.run(arguments: route + common, environment: ["SC_TOKEN": "token"])).exitCode == 2) }
@@ -104,8 +104,10 @@ import Testing
     #expect(transport.requests.isEmpty)
     if mode == .writer {
       #expect(cli.usage.contains("admob adunits create-native plan"))
+    } else if mode == .deleter {
+      #expect(cli.usage.contains("google-ads <campaigns|campaign-budgets"))
     } else {
-      #expect(cli.usage.contains("No mutations enabled"))
+      #expect(cli.usage.contains("google-ads manager-links link"))
     }
   }
 }
@@ -119,7 +121,7 @@ import Testing
     #expect(operation.availability == "implemented")
   }
   let writerOperations = OperationCatalog.implementedOperations.filter { $0.capability == .writer }
-  #expect(writerOperations.isEmpty)
+  #expect(writerOperations.map(\.id) == ["google-ads.search-campaigns.create"])
   #expect(OperationCatalog.operations.contains {
     $0.id == "admob.accounts.adUnits.createNative" && $0.availability == "preview-only-durable-apply-pending"
   })

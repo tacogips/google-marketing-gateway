@@ -87,7 +87,7 @@ public enum GoogleAdsRequests {
     )
   }
 
-  private static func request(path: String, accessToken: String, developerToken: String, loginCustomerId: String?, method: String = "GET", body: Data? = nil) throws -> URLRequest {
+  static func request(path: String, accessToken: String, developerToken: String, loginCustomerId: String?, method: String = "GET", body: Data? = nil) throws -> URLRequest {
     guard HTTPHeaderValue.isCredential(accessToken), HTTPHeaderValue.isCredential(developerToken, maximumBytes: 4_096) else {
       throw GatewayError("Google Ads credential is invalid", code: .missingCredential, exitCode: 2)
     }

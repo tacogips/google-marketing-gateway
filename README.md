@@ -6,6 +6,7 @@ uses a shared core and capability-separated executables modeled on
 
 - `google-marketing-gateway-reader`
 - `google-marketing-gateway-writer`
+- `google-marketing-gateway-deleter`
 - `google-marketing-gateway-admin`
 
 The legacy `google-marketing-gateway` executable currently delegates to the
@@ -37,8 +38,13 @@ It validates the exact `https://www.googleapis.com/auth/admob.monetization`
 writer profile and constructs the narrowly typed request, but live apply stays
 fail-closed until the reviewed durable anti-replay state is implemented. The
 API has limited access and may return 403 without entitlement. Update and
-delete are unavailable because the public API does not expose them. All other
-writer and admin mutation allowlists remain empty. Google Trends is represented in the catalog as an official alpha API
+delete are unavailable because the public API does not expose them.
+
+Google Ads Search campaign creation is available in the writer through a typed,
+atomic `GoogleAdsService.Mutate` request. Google Ads removal is isolated in the
+deleter executable: reader, writer, and admin cannot emit provider `remove`
+operations. Google Ads removal changes the resource status to `REMOVED`; the
+provider does not expose a stronger physical-erasure operation. Google Trends is represented in the catalog as an official alpha API
 requiring allowlist access; this project does not scrape `trends.google.com` or
 use unofficial endpoints.
 
@@ -77,6 +83,90 @@ swift run google-marketing-gateway-writer admob adunits create-native plan \
 The preview deliberately emits no reusable plan token and cannot be applied.
 Native layout, rendering, AdChoices, click and impression handling, and SDK
 test-ad behavior remain mobile-app concerns.
+
+### Google Ads Search campaign creation and removal
+
+Use separate Google Ads writer and deleter profiles even though Google exposes
+the same OAuth scope for both. Binary routing, profile capability, typed request
+builders, and catalog descriptors enforce the separation:
+
+```json
+{
+  "profiles": [
+    {
+      "id": "google-ads-writer",
+      "product": "google-ads",
+      "capability": "writer",
+      "oauthScopes": ["https://www.googleapis.com/auth/adwords"],
+      "accessTokenEnvironmentVariable": "GOOGLE_ADS_ACCESS_TOKEN",
+      "developerTokenEnvironmentVariable": "GOOGLE_ADS_DEVELOPER_TOKEN",
+      "loginCustomerIdEnvironmentVariable": "GOOGLE_ADS_LOGIN_CUSTOMER_ID"
+    },
+    {
+      "id": "google-ads-deleter",
+      "product": "google-ads",
+      "capability": "deleter",
+      "oauthScopes": ["https://www.googleapis.com/auth/adwords"],
+      "accessTokenEnvironmentVariable": "GOOGLE_ADS_ACCESS_TOKEN",
+      "developerTokenEnvironmentVariable": "GOOGLE_ADS_DEVELOPER_TOKEN",
+      "loginCustomerIdEnvironmentVariable": "GOOGLE_ADS_LOGIN_CUSTOMER_ID"
+    }
+  ]
+}
+```
+
+The campaign request file includes every resource required for an enabled
+Search campaign. Budget and CPC inputs are micros and are capped at 500,000,000:
+
+```json
+{
+  "customerId": "0987654321",
+  "campaignName": "Gateway verification",
+  "dailyBudgetMicros": 1000000,
+  "adGroupName": "Gateway verification",
+  "cpcBidMicros": 250000,
+  "geoTargetConstantId": "2392",
+  "languageConstantId": "1005",
+  "keywords": [{"text": "swift marketing gateway", "matchType": "EXACT"}],
+  "headlines": ["Swift Marketing Gateway", "Typed Google Ads Control", "Safe Campaign Operations"],
+  "descriptions": ["Manage Google marketing operations with a typed Swift command line tool.", "Separate reading, writing, and removal with explicit capabilities."],
+  "finalUrls": ["https://example.com/google-marketing-gateway"]
+}
+```
+
+Plan is local and zero-network. Validate sends the same request with
+`validateOnly`. Apply creates the enabled budget, campaign, location/language
+criteria, ad group, keywords, and responsive Search ad atomically:
+
+```bash
+swift run google-marketing-gateway-writer google-ads search-campaigns create plan \
+  --request-file campaign.json --profile google-ads-writer --config profiles.json
+
+kinko exec --env GOOGLE_ADS_ACCESS_TOKEN,GOOGLE_ADS_DEVELOPER_TOKEN -- \
+  swift run google-marketing-gateway-writer google-ads search-campaigns create validate \
+  --request-file campaign.json --profile google-ads-writer --config profiles.json
+
+kinko exec --env GOOGLE_ADS_ACCESS_TOKEN,GOOGLE_ADS_DEVELOPER_TOKEN -- \
+  swift run google-marketing-gateway-writer google-ads search-campaigns create apply \
+  --request-file campaign.json --profile google-ads-writer --config profiles.json \
+  --confirm-customer-id 0987654321
+```
+
+Removal has the same plan/validate/apply stages and requires the full target
+resource name as apply confirmation:
+
+```bash
+kinko exec --env GOOGLE_ADS_ACCESS_TOKEN,GOOGLE_ADS_DEVELOPER_TOKEN -- \
+  swift run google-marketing-gateway-deleter google-ads campaigns remove apply \
+  --customer-id 0987654321 \
+  --resource-name customers/0987654321/campaigns/456789 \
+  --confirm-resource-name customers/0987654321/campaigns/456789 \
+  --profile google-ads-deleter --config profiles.json
+```
+
+The deleter supports campaigns, campaign budgets, campaign criteria, ad groups,
+ad group criteria, and ad group ads. Create and update operations are rejected
+by the deleter before credentials are read.
 
 Create a JSON config containing product-isolated reader profiles. Config stores
 only environment-variable names, never token values:
@@ -138,8 +228,16 @@ errors before printing them. `GOOGLE_MARKETING_GATEWAY_CONFIG` can provide the
 config path instead of `--config`.
 
 Google Ads v25 profiles also declare a `developerTokenEnvironmentVariable` and
-may declare a hyphen-free `loginCustomerId`; their values remain solely in the
-environment. The reader supports `google-ads accessible-customers list` and
+may declare a `loginCustomerIdEnvironmentVariable`. Both fields contain only
+environment-variable names; the resolved values remain solely in the process
+environment. Use a manager-routed profile with
+`loginCustomerIdEnvironmentVariable` only when the client is linked below that
+manager. For a directly accessible, unlinked client, use a separate profile
+that omits `loginCustomerIdEnvironmentVariable`; Google otherwise returns
+`USER_PERMISSION_DENIED`. The checked-in `profiles.json` provides
+`google-ads-direct-reader`, `google-ads-direct-writer`, and
+`google-ads-direct-deleter` for that case. The reader supports
+`google-ads accessible-customers list` and
 `google-ads search --customer-id <digits> --query-file <path>`. It also
 supports generated agency reads:
 
@@ -162,6 +260,55 @@ These agency reads use provider-generated GAQL over the official Google Ads
 `googleAds:search` method. Callers provide only the operating customer ID and
 optional page token; they cannot alter the GAQL, origin, headers, developer
 token, or login customer ID.
+
+Keyword ideas are a typed reader operation. The local request file accepts one
+to ten geo targets, a language, up to twenty seed phrases, an optional HTTPS
+URL, and a response page size capped at 1,000:
+
+```json
+{
+  "customerId": "9708882574",
+  "languageConstantId": "1005",
+  "geoTargetConstantIds": ["2392"],
+  "keywords": ["画面翻訳", "OCR 翻訳"],
+  "url": "https://konjac-note.com/",
+  "pageSize": 100
+}
+```
+
+```bash
+kinko exec --env GOOGLE_ADS_ACCESS_TOKEN,GOOGLE_ADS_DEVELOPER_TOKEN,GOOGLE_ADS_LOGIN_CUSTOMER_ID -- \
+  swift run google-marketing-gateway-reader google-ads keyword-ideas generate \
+  --request-file keyword-ideas.json --profile google-ads-reader --config profiles.json
+```
+
+Client-account creation is isolated in the admin executable and uses
+`CustomerService.CreateCustomerClient`. Plan performs no network request;
+apply requires the exact manager ID. Google does not provide `validateOnly` for
+this method. Currency and time zone are fixed when the account is created.
+
+```json
+{
+  "managerCustomerId": "3827004490",
+  "descriptiveName": "Konjac Note API Client",
+  "currencyCode": "JPY",
+  "timeZone": "Asia/Tokyo"
+}
+```
+
+```bash
+swift run google-marketing-gateway-admin google-ads client-accounts create plan \
+  --request-file client-account.json --profile google-ads-admin --config profiles.json
+
+kinko exec --env GOOGLE_ADS_ACCESS_TOKEN,GOOGLE_ADS_DEVELOPER_TOKEN,GOOGLE_ADS_LOGIN_CUSTOMER_ID -- \
+  swift run google-marketing-gateway-admin google-ads client-accounts create apply \
+  --request-file client-account.json --profile google-ads-admin --config profiles.json \
+  --confirm-manager-customer-id 3827004490
+```
+
+Google currently limits API account creation to eligible advertisers with more
+than USD 1,000 in spend and good policy standing. Basic Access approval is also
+needed for this production manager workflow.
 
 Analytics Data v1beta supports metadata, `runReport`, and
 `checkCompatibility` with the

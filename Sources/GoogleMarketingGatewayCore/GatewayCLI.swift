@@ -6,6 +6,9 @@ public struct GoogleMarketingGatewayCLI: Sendable {
   private let credentialResolver: any ReaderCredentialResolving
   private let authManager: any ReaderAuthManaging
   private let writerCommand: AdMobNativeWriterCommand
+  private let googleAdsWriterCommand: GoogleAdsWriterCommand
+  private let googleAdsDeleterCommand: GoogleAdsDeleterCommand
+  private let googleAdsAdminCommand: GoogleAdsAdminCommand
 
   public init(
     mode: GatewayMode,
@@ -19,6 +22,9 @@ public struct GoogleMarketingGatewayCLI: Sendable {
     self.credentialResolver = credentialResolver
     self.authManager = authManager
     self.writerCommand = AdMobNativeWriterCommand()
+    self.googleAdsWriterCommand = GoogleAdsWriterCommand(client: client, credentialResolver: credentialResolver)
+    self.googleAdsDeleterCommand = GoogleAdsDeleterCommand(client: client, credentialResolver: credentialResolver)
+    self.googleAdsAdminCommand = GoogleAdsAdminCommand(client: client, credentialResolver: credentialResolver)
   }
 
   public func run(
@@ -36,6 +42,9 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         return GatewayCommandResult(exitCode: 0, stdout: try OperationCatalog.encoded())
       }
       if mode == .writer {
+        if Array(arguments.prefix(2)) == ["google-ads", "search-campaigns"] {
+          return try await googleAdsWriterCommand.run(arguments: arguments, environment: environment)
+        }
         guard Array(arguments.prefix(3)) == ["admob", "adunits", "create-native"] else {
           throw GatewayError(
             "No writer operation is enabled for this command",
@@ -47,6 +56,12 @@ public struct GoogleMarketingGatewayCLI: Sendable {
           arguments: arguments,
           environment: environment
         )
+      }
+      if mode == .deleter {
+        return try await googleAdsDeleterCommand.run(arguments: arguments, environment: environment)
+      }
+      if mode == .admin {
+        return try await googleAdsAdminCommand.run(arguments: arguments, environment: environment)
       }
       guard mode == .reader else {
         throw GatewayError(
@@ -98,6 +113,7 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         "  google-ads customer-client-links list --customer-id <digits> [--page-token <token>]",
         "  google-ads customer-clients list --customer-id <digits> [--page-token <token>]",
         "  google-ads customer-users list --customer-id <digits> [--page-token <token>]",
+        "  google-ads keyword-ideas generate --request-file <path>",
         "  analytics-data metadata get --property properties/<digits>",
         "  analytics-data reports run --property properties/<digits> --start-date YYYY-MM-DD --end-date YYYY-MM-DD --metrics METRIC[,METRIC]",
         "  analytics-data compatibility check --property properties/<digits> --metrics METRIC[,METRIC]",
@@ -130,13 +146,17 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         "",
         "Implemented operations and accepted OAuth scopes:"
       ]
-      for operation in OperationCatalog.implementedOperations {
+      for operation in OperationCatalog.implementedOperations where operation.capability == .reader {
         lines.append("  \(operation.id)")
         lines += operation.oauthScopes.map { "    \($0)" }
       }
     } else {
       if mode == .writer {
-        lines += ["  \(AdMobNativeWriterCommand.usage)", "  All other mutations remain unavailable."]
+        lines += ["  \(AdMobNativeWriterCommand.usage)", "  \(GoogleAdsWriterCommand.usage)", "  Remove operations are unavailable; use the deleter executable."]
+      } else if mode == .deleter {
+        lines += ["  \(GoogleAdsDeleterCommand.usage)", "  Create and update operations are unavailable."]
+      } else if mode == .admin {
+        lines += ["  \(GoogleAdsAdminCommand.usage)", "  Campaign and ad mutations are unavailable."]
       } else {
         lines.append("  No mutations enabled: the reviewed \(mode.rawValue) allowlist is empty.")
       }
@@ -187,7 +207,18 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       throw GatewayError("Credential resolution failed", code: .missingCredential, exitCode: 2)
     }
     let developerToken = try developerToken(profile: profile, environment: environment)
-    let request = try readerRequest(command: command, flags: flags, accessToken: accessToken, developerToken: developerToken, loginCustomerId: profile.loginCustomerId, searchAnalyticsRequest: preparedSearchAnalyticsRequest)
+    let loginCustomerId = try GoogleAdsMutationSupport.loginCustomerId(
+      profile: profile,
+      environment: environment
+    )
+    let request = try readerRequest(
+      command: command,
+      flags: flags,
+      accessToken: accessToken,
+      developerToken: developerToken,
+      loginCustomerId: loginCustomerId,
+      searchAnalyticsRequest: preparedSearchAnalyticsRequest
+    )
     let data = try await client.execute(request)
     guard let output = String(bytes: data, encoding: .utf8) else {
       throw GatewayError("Google returned non-UTF-8 JSON", code: .invalidResponse)
@@ -231,6 +262,8 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       ("google-ads.customer-clients.list", .googleAds)
     case ["google-ads", "customer-users", "list"]:
       ("google-ads.customer-users.list", .googleAds)
+    case ["google-ads", "keyword-ideas", "generate"]:
+      ("google-ads.keyword-ideas.generate", .googleAds)
     case ["analytics-data", "metadata", "get"]:
       ("analytics-data.metadata.get", .analyticsData)
     case ["analytics-data", "reports", "run"]:
@@ -287,6 +320,8 @@ public struct GoogleMarketingGatewayCLI: Sendable {
          ["google-ads", "customer-clients", "list"],
          ["google-ads", "customer-users", "list"]:
       return Set(selection + ["customer-id", "page-token"])
+    case ["google-ads", "keyword-ideas", "generate"]:
+      return Set(selection + ["request-file"])
     case ["analytics-data", "metadata", "get"]:
       return Set(selection + ["property"])
     case ["analytics-data", "reports", "run"]:
@@ -397,9 +432,20 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         accessToken: accessToken
       )
     case ["google-ads", "accessible-customers", "list"]:
-      try GoogleAdsRequests.accessibleCustomers(accessToken: accessToken, developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"), loginCustomerId: loginCustomerId)
+      try GoogleAdsRequests.accessibleCustomers(
+        accessToken: accessToken,
+        developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
+        loginCustomerId: loginCustomerId
+      )
     case ["google-ads", "search", "run"]:
-      try GoogleAdsRequests.search(customerId: try requiredFlag(flags, "customer-id"), query: try loadGAQL(path: try requiredFlag(flags, "query-file")), pageToken: flags["page-token"], accessToken: accessToken, developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"), loginCustomerId: loginCustomerId)
+      try GoogleAdsRequests.search(
+        customerId: try requiredFlag(flags, "customer-id"),
+        query: try loadGAQL(path: try requiredFlag(flags, "query-file")),
+        pageToken: flags["page-token"],
+        accessToken: accessToken,
+        developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
+        loginCustomerId: loginCustomerId
+      )
     case ["google-ads", "customer-client-links", "list"]:
       try GoogleAdsRequests.customerClientLinks(
         customerId: try requiredFlag(flags, "customer-id"),
@@ -424,12 +470,38 @@ public struct GoogleMarketingGatewayCLI: Sendable {
         developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
         loginCustomerId: loginCustomerId
       )
+    case ["google-ads", "keyword-ideas", "generate"]:
+      try GoogleAdsRequests.generateKeywordIdeas(
+        input: GoogleAdsKeywordIdeasInput.load(path: try requiredFlag(flags, "request-file")),
+        accessToken: accessToken,
+        developerToken: try requiredValue(developerToken, message: "Google Ads developer token is required"),
+        loginCustomerId: loginCustomerId
+      )
     case ["analytics-data", "metadata", "get"]:
       try AnalyticsDataRequests.metadata(property: try requiredFlag(flags, "property"), accessToken: accessToken)
     case ["analytics-data", "reports", "run"]:
-      try AnalyticsDataRequests.runReport(property: try requiredFlag(flags, "property"), request: try AnalyticsDataRequests.reportRequest(metrics: try requiredCommaSeparatedFlag(flags, "metrics"), dimensions: commaSeparatedFlag(flags, "dimensions"), startDate: try requiredFlag(flags, "start-date"), endDate: try requiredFlag(flags, "end-date"), offset: flags["offset"], limit: flags["limit"], currencyCode: flags["currency-code"], keepEmptyRows: boolFlag(flags, "keep-empty-rows"), returnPropertyQuota: boolFlag(flags, "return-property-quota")), accessToken: accessToken)
+      try AnalyticsDataRequests.runReport(
+        property: try requiredFlag(flags, "property"),
+        request: try AnalyticsDataRequests.reportRequest(
+          metrics: try requiredCommaSeparatedFlag(flags, "metrics"),
+          dimensions: commaSeparatedFlag(flags, "dimensions"),
+          startDate: try requiredFlag(flags, "start-date"),
+          endDate: try requiredFlag(flags, "end-date"),
+          offset: flags["offset"],
+          limit: flags["limit"],
+          currencyCode: flags["currency-code"],
+          keepEmptyRows: boolFlag(flags, "keep-empty-rows"),
+          returnPropertyQuota: boolFlag(flags, "return-property-quota")
+        ),
+        accessToken: accessToken
+      )
     case ["analytics-data", "compatibility", "check"]:
-      try AnalyticsDataRequests.compatibility(property: try requiredFlag(flags, "property"), metrics: try requiredCommaSeparatedFlag(flags, "metrics"), dimensions: commaSeparatedFlag(flags, "dimensions"), accessToken: accessToken)
+      try AnalyticsDataRequests.compatibility(
+        property: try requiredFlag(flags, "property"),
+        metrics: try requiredCommaSeparatedFlag(flags, "metrics"),
+        dimensions: commaSeparatedFlag(flags, "dimensions"),
+        accessToken: accessToken
+      )
     case ["search-console", "sites", "list"]:
       try SearchConsoleRequests.sitesList(accessToken: accessToken)
     case ["search-console", "sites", "get"]:
@@ -441,7 +513,12 @@ public struct GoogleMarketingGatewayCLI: Sendable {
     case ["search-console", "sitemaps", "get"]:
       try SearchConsoleRequests.sitemapsGet(site: try SearchConsoleProperty(requiredFlag(flags, "site")), feedpath: try SearchConsoleHTTPURL(requiredFlag(flags, "feedpath")), accessToken: accessToken)
     case ["search-console", "url-inspection", "inspect"]:
-      try SearchConsoleRequests.urlInspection(site: try SearchConsoleProperty(requiredFlag(flags, "site")), inspectionURL: try SearchConsoleHTTPURL(requiredFlag(flags, "inspection-url")), languageCode: try flags["language-code"].map(SearchConsoleLanguageCode.init), accessToken: accessToken)
+      try SearchConsoleRequests.urlInspection(
+        site: try SearchConsoleProperty(requiredFlag(flags, "site")),
+        inspectionURL: try SearchConsoleHTTPURL(requiredFlag(flags, "inspection-url")),
+        languageCode: try flags["language-code"].map(SearchConsoleLanguageCode.init),
+        accessToken: accessToken
+      )
     default:
       throw GatewayError("Unknown or unavailable reader operation", code: .invalidArgument, exitCode: 2)
     }

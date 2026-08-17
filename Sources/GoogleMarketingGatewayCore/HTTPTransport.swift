@@ -76,8 +76,29 @@ public struct GoogleRESTClient: Sendable {
       let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
       let error = object["error"] as? [String: Any],
       let status = error["status"] as? String,
-      status.range(of: #"^[A-Z0-9_]{1,80}$"#, options: .regularExpression) != nil
+      isSafeProviderCode(status)
     else { return "" }
-    return " (\(status))"
+    let codes = googleAdsErrorCodes(error)
+    let suffix = codes.isEmpty ? "" : ": \(codes.joined(separator: ", "))"
+    return " (\(status)\(suffix))"
+  }
+
+  private static func googleAdsErrorCodes(_ error: [String: Any]) -> [String] {
+    guard let details = error["details"] as? [[String: Any]] else { return [] }
+    let codes = details.flatMap { detail -> [String] in
+      guard let errors = detail["errors"] as? [[String: Any]] else { return [] }
+      return errors.flatMap { item -> [String] in
+        guard let errorCode = item["errorCode"] as? [String: Any] else { return [] }
+        return errorCode.values.compactMap { value in
+          guard let code = value as? String, isSafeProviderCode(code) else { return nil }
+          return code
+        }
+      }
+    }
+    return Array(Set(codes)).sorted()
+  }
+
+  private static func isSafeProviderCode(_ value: String) -> Bool {
+    value.range(of: #"^[A-Z][A-Z0-9_]{0,79}$"#, options: .regularExpression) != nil
   }
 }

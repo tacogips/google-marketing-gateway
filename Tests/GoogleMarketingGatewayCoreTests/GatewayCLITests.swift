@@ -109,6 +109,31 @@ private struct StubTransport: HTTPTransport {
   #expect(!result.stderr.contains("fixture-token"))
 }
 
+@Test func providerErrorExposesOnlySafeGoogleAdsErrorCodes() async {
+  let sensitiveValue = "sensitive provider detail"
+  let body = """
+  {"error":{"status":"PERMISSION_DENIED","message":"\(sensitiveValue)","details":[
+    {"errors":[{"errorCode":{"authorizationError":"DEVELOPER_TOKEN_NOT_APPROVED"},
+    "message":"\(sensitiveValue)"}]}
+  ]}}
+  """
+  let cli = GoogleMarketingGatewayCLI(
+    mode: .reader,
+    transport: StubTransport(statusCode: 403, body: body)
+  )
+  let result = await cli.run(
+    arguments: [
+      "adsense", "accounts", "list",
+      "--profile", "adsense-reader",
+      "--config", readerProfileFixturePath
+    ],
+    environment: ["ADSENSE_TEST_ACCESS_TOKEN": "fixture-token"]
+  )
+  #expect(result.stderr.contains("PERMISSION_DENIED: DEVELOPER_TOKEN_NOT_APPROVED"))
+  #expect(!result.stderr.contains(sensitiveValue))
+  #expect(!result.stderr.contains("fixture-token"))
+}
+
 @Test func configStatusReportsAvailabilityWithoutTokenValues() async {
   let cli = GoogleMarketingGatewayCLI(mode: .reader)
   let result = await cli.run(

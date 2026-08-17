@@ -1,0 +1,23 @@
+{
+  "customerId": "9708882574",
+  "campaignName": "google-marketing-gateway Explorer validation 2026-08-16 1450",
+  "dailyBudgetMicros": 259000000,
+  "adGroupName": "Konjac Note Explorer validation 2026-08-16 1450",
+  "cpcBidMicros": 100000000,
+  "geoTargetConstantId": "2392",
+  "languageConstantId": "1005",
+  "keywords": [
+    {"text": "画面翻訳", "matchType": "EXACT"},
+    {"text": "OCR 翻訳", "matchType": "PHRASE"}
+  ],
+  "headlines": [
+    "Konjacで画面をすぐ翻訳",
+    "OCR翻訳をもっと手軽に",
+    "画面キャプチャから翻訳"
+  ],
+  "descriptions": [
+    "画面をキャプチャして、OCRと翻訳をすばやく実行できます。",
+    "Konjacで画面内の文字を読み取り、自然な翻訳を確認できます。"
+  ],
+  "finalUrls": ["https://konjac-note.com/"]
+}

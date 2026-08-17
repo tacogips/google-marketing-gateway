@@ -44,7 +44,15 @@ private final class NewRouteTransport: HTTPTransport, @unchecked Sendable {
   let root = try cliTemporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
   let query = root.appendingPathComponent("query.sql"); try Data("SELECT customer.id FROM customer".utf8).write(to: query)
   let config = root.appendingPathComponent("profiles.json")
-  try Data(#"{"profiles":[{"id":"ads","product":"google-ads","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/adwords"],"accessTokenEnvironmentVariable":"ADS_TOKEN","developerTokenEnvironmentVariable":"ADS_DEV"},{"id":"analytics","product":"analytics-data","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/analytics.readonly"],"accessTokenEnvironmentVariable":"AN_TOKEN"}]}"#.utf8).write(to: config)
+  let profiles = """
+  {"profiles":[
+    {"id":"ads","product":"google-ads","capability":"reader",
+     "oauthScopes":["https://www.googleapis.com/auth/adwords"],"accessTokenEnvironmentVariable":"ADS_TOKEN",
+     "developerTokenEnvironmentVariable":"ADS_DEV","loginCustomerIdEnvironmentVariable":"ADS_LOGIN"},
+    {"id":"analytics","product":"analytics-data","capability":"reader","oauthScopes":["https://www.googleapis.com/auth/analytics.readonly"],"accessTokenEnvironmentVariable":"AN_TOKEN"}
+  ]}
+  """
+  try Data(profiles.utf8).write(to: config)
   let transport = NewRouteTransport()
   let cli = GoogleMarketingGatewayCLI(mode: .reader, transport: transport)
   let cases = [
@@ -58,7 +66,7 @@ private final class NewRouteTransport: HTTPTransport, @unchecked Sendable {
     ["analytics-data", "compatibility", "check", "--property", "properties/123", "--metrics", "activeUsers", "--profile", "analytics"]
   ]
   for arguments in cases {
-    let result = await cli.run(arguments: arguments + ["--config", config.path], environment: ["ADS_TOKEN": "token", "ADS_DEV": "developer", "AN_TOKEN": "token"])
+    let result = await cli.run(arguments: arguments + ["--config", config.path], environment: ["ADS_TOKEN": "token", "ADS_DEV": "developer", "ADS_LOGIN": "3827004490", "AN_TOKEN": "token"])
     #expect(result.exitCode == 0)
   }
   #expect(transport.requests.map { $0.url?.absoluteString } == [
@@ -77,7 +85,43 @@ private final class NewRouteTransport: HTTPTransport, @unchecked Sendable {
   #expect(transport.requests[2].value(forHTTPHeaderField: "developer-token") == "developer")
   #expect(transport.requests[3].value(forHTTPHeaderField: "developer-token") == "developer")
   #expect(transport.requests[4].value(forHTTPHeaderField: "developer-token") == "developer")
+  #expect(transport.requests[0...4].allSatisfy {
+    $0.value(forHTTPHeaderField: "login-customer-id") == "3827004490"
+  })
   #expect(transport.requests[5...].allSatisfy { $0.value(forHTTPHeaderField: "developer-token") == nil })
+}
+
+@Test func missingOrInvalidGoogleAdsLoginCustomerEnvironmentDoesNotDispatch() async throws {
+  let root = try cliTemporaryDirectory(); defer { try? FileManager.default.removeItem(at: root) }
+  let config = root.appendingPathComponent("profiles.json")
+  let profiles = """
+  {"profiles":[{
+    "id":"ads","product":"google-ads","capability":"reader",
+    "oauthScopes":["https://www.googleapis.com/auth/adwords"],
+    "accessTokenEnvironmentVariable":"ADS_TOKEN",
+    "developerTokenEnvironmentVariable":"ADS_DEV",
+    "loginCustomerIdEnvironmentVariable":"ADS_LOGIN"
+  }]}
+  """
+  try Data(profiles.utf8).write(to: config)
+  let transport = NewRouteTransport()
+  let cli = GoogleMarketingGatewayCLI(mode: .reader, transport: transport)
+  let arguments = ["google-ads", "accessible-customers", "list", "--profile", "ads", "--config", config.path]
+
+  let missing = await cli.run(
+    arguments: arguments,
+    environment: ["ADS_TOKEN": "token", "ADS_DEV": "developer"]
+  )
+  #expect(missing.exitCode == 2)
+  #expect(transport.requests.isEmpty)
+
+  let invalid = await cli.run(
+    arguments: arguments,
+    environment: ["ADS_TOKEN": "token", "ADS_DEV": "developer", "ADS_LOGIN": "382-700-4490"]
+  )
+  #expect(invalid.exitCode == 2)
+  #expect(transport.requests.isEmpty)
+  #expect(!invalid.stderr.contains("382-700-4490"))
 }
 
 @Test func profileMismatchAndUnsafeGAQLDoNotTouchCredentialsOrTransport() async throws {

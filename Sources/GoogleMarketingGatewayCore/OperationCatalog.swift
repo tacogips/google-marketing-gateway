@@ -145,6 +145,71 @@ public enum OperationCatalog {
       requestBodyPolicy: "provider-generated-gaql"
     ),
     OperationDescriptor(
+      id: "google-ads.keyword-ideas.generate",
+      product: .googleAds,
+      capability: .reader,
+      oauthScopes: ["https://www.googleapis.com/auth/adwords"],
+      providerMethod: "KeywordPlanIdeaService.GenerateKeywordIdeas",
+      requestKind: "read-post",
+      requestBodyPolicy: "typed-bounded-keyword-seed-input",
+      responsePolicy: "bounded-json",
+      verification: "deterministic-request-tests-and-live-read"
+    ),
+    OperationDescriptor(
+      id: "google-ads.search-campaigns.create",
+      product: .googleAds,
+      capability: .writer,
+      oauthScopes: ["https://www.googleapis.com/auth/adwords"],
+      providerMethod: "GoogleAdsService.Mutate",
+      requestKind: "mutate",
+      spendRisk: "ad-spend",
+      requestBodyPolicy: "typed-search-campaign-input",
+      responsePolicy: "bounded-json",
+      verification: "plan-validateOnly-and-deterministic-tests",
+      confirmationPolicy: "exact-customer-id-on-apply",
+      duplicateRiskHorizon: "provider-request-outcome",
+      reconciliationPolicy: "query-created-resource-names-after-ambiguous-result",
+      planPayloadPolicy: "local-input-only"
+    ),
+    OperationDescriptor(
+      id: "google-ads.manager-links.link",
+      product: .googleAds,
+      capability: .admin,
+      oauthScopes: ["https://www.googleapis.com/auth/adwords"],
+      providerMethod: "CustomerClientLinkService.MutateCustomerClientLink + GoogleAdsService.Search + CustomerManagerLinkService.MutateCustomerManagerLink",
+      requestKind: "admin-mutate",
+      spendRisk: "account-access",
+      requestBodyPolicy: "typed-manager-and-client-ids",
+      responsePolicy: "bounded-json",
+      verification: "plan-validateOnly-and-deterministic-tests",
+      confirmationPolicy: "exact-manager-and-client-ids-on-apply",
+      duplicateRiskHorizon: "provider-request-outcome",
+      reconciliationPolicy: "query-customer-client-link-after-ambiguous-result",
+      planPayloadPolicy: "local-input-only"
+    ),
+    OperationDescriptor(
+      id: "google-ads.client-accounts.create",
+      product: .googleAds,
+      capability: .admin,
+      oauthScopes: ["https://www.googleapis.com/auth/adwords"],
+      providerMethod: "CustomerService.CreateCustomerClient",
+      requestKind: "admin-create",
+      spendRisk: "account-creation",
+      requestBodyPolicy: "typed-customer-account-input",
+      responsePolicy: "bounded-json",
+      verification: "local-plan-and-deterministic-tests",
+      confirmationPolicy: "exact-manager-id-on-apply",
+      duplicateRiskHorizon: "provider-request-outcome",
+      reconciliationPolicy: "query-customer-clients-after-ambiguous-result",
+      planPayloadPolicy: "local-input-only"
+    ),
+    googleAdsRemoval("campaigns", providerMethod: "CampaignService.MutateCampaigns"),
+    googleAdsRemoval("campaign-budgets", providerMethod: "CampaignBudgetService.MutateCampaignBudgets"),
+    googleAdsRemoval("campaign-criteria", providerMethod: "CampaignCriterionService.MutateCampaignCriteria"),
+    googleAdsRemoval("ad-groups", providerMethod: "AdGroupService.MutateAdGroups"),
+    googleAdsRemoval("ad-group-criteria", providerMethod: "AdGroupCriterionService.MutateAdGroupCriteria"),
+    googleAdsRemoval("ad-group-ads", providerMethod: "AdGroupAdService.MutateAdGroupAds"),
+    OperationDescriptor(
       id: "analytics-data.metadata.get",
       product: .analyticsData,
       capability: .reader,
@@ -307,7 +372,6 @@ public enum OperationCatalog {
   }
 
   private static let plannedInventory: [OperationDescriptor] = [
-    inventory("google-ads.manager-links.mutate", .googleAds, .admin, "planned-reviewed-allowlist-required", requestKind: "admin-mutate", spendRisk: "serving-risk"),
     inventory("display-video-360.advertisers.list", .displayVideo360, .reader, "planned"),
     inventory("display-video-360.campaigns.create", .displayVideo360, .writer, "planned-reviewed-allowlist-required", requestKind: "mutate", spendRisk: "serving-risk"),
     inventory("bid-manager.queries.run", .bidManager, .reader, "planned"),
@@ -335,6 +399,25 @@ public enum OperationCatalog {
     inventory("local-services-ads.accounts.search", .localServicesAds, .reader, "planned"),
     inventory("trends.scraping", .trends, .reader, "excluded-unofficial", stability: "excluded", origin: "https://trends.googleapis.com", requestKind: "excluded", responsePolicy: "none")
   ]
+
+  private static func googleAdsRemoval(_ resource: String, providerMethod: String) -> OperationDescriptor {
+    OperationDescriptor(
+      id: "google-ads.\(resource).remove",
+      product: .googleAds,
+      capability: .deleter,
+      oauthScopes: ["https://www.googleapis.com/auth/adwords"],
+      providerMethod: providerMethod,
+      requestKind: "delete",
+      spendRisk: "serving-stop",
+      requestBodyPolicy: "typed-single-resource-remove",
+      responsePolicy: "bounded-json",
+      verification: "plan-validateOnly-and-deterministic-tests",
+      confirmationPolicy: "exact-resource-name-on-apply",
+      duplicateRiskHorizon: "none-idempotent-removed-state",
+      reconciliationPolicy: "query-resource-status-after-ambiguous-result",
+      planPayloadPolicy: "resource-name-only"
+    )
+  }
 
   private static func inventory(
     _ id: String,

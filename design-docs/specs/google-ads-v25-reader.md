@@ -32,7 +32,7 @@ Ads-specific profile fields and request behavior.
 - Google Ads reader profiles using the exact OAuth scope
   `https://www.googleapis.com/auth/adwords`.
 - A required `developerTokenEnvironmentVariable` reference and an optional
-  `loginCustomerId` in Google Ads profiles.
+  `loginCustomerIdEnvironmentVariable` in Google Ads profiles.
 - `google-ads accessible-customers list`.
 - `google-ads search --customer-id <digits> --query-file <path>
   [--page-token <token>]`.
@@ -63,7 +63,7 @@ Google Ads adds these product-specific properties:
 | `capability` | Required | Must equal `reader`. |
 | `oauthScopes` | Required | Set must equal exactly `{https://www.googleapis.com/auth/adwords}`; duplicates, omissions, and every cross-product scope are rejected. |
 | `developerTokenEnvironmentVariable` | Required | Non-empty, safe environment-variable name using the existing uppercase ASCII identifier rules. Only the referenced environment value is read at operation execution time. |
-| `loginCustomerId` | Optional | When present, must be a non-empty sequence of ASCII digits. Hyphens, whitespace, signs, separators, Unicode digits, and path characters are rejected. |
+| `loginCustomerIdEnvironmentVariable` | Optional | When present, must be a safe environment-variable name. The resolved value must be a non-empty sequence of at most 20 ASCII digits. |
 
 Every profile retains its existing required `accessTokenEnvironmentVariable`.
 An installed OAuth profile additionally supplies both optional shared
@@ -84,7 +84,7 @@ Example shape, with values intentionally limited to non-secret references:
       "oauthScopes": ["https://www.googleapis.com/auth/adwords"],
       "accessTokenEnvironmentVariable": "GOOGLE_MARKETING_ADS_ACCESS_TOKEN",
       "developerTokenEnvironmentVariable": "GOOGLE_MARKETING_ADS_DEVELOPER_TOKEN",
-      "loginCustomerId": "1234567890"
+      "loginCustomerIdEnvironmentVariable": "GOOGLE_ADS_LOGIN_CUSTOMER_ID"
     }
   ]
 }
@@ -139,8 +139,9 @@ selection contract.
 
 ### Identifier and flag validation
 
-- `--customer-id` uses the same non-empty ASCII-digits-only rule as
-  `loginCustomerId`; it is interpolated only after validation.
+- `--customer-id` uses the same non-empty ASCII-digits-only rule as the value
+  resolved through `loginCustomerIdEnvironmentVariable`; it is interpolated
+  only after validation.
 - `--query-file` is required and is the only source of GAQL. There is no
   `--query` flag or stdin fallback.
 - `--page-token`, when present, must be non-empty, no larger than 16,384 UTF-8

@@ -1,0 +1,17 @@
+SELECT
+  campaign.id,
+  campaign.name,
+  campaign.status,
+  campaign.serving_status,
+  campaign.primary_status,
+  ad_group.id,
+  ad_group.name,
+  ad_group.status,
+  ad_group_ad.ad.id,
+  ad_group_ad.status,
+  ad_group_ad.policy_summary.approval_status,
+  metrics.impressions,
+  metrics.clicks,
+  metrics.cost_micros
+FROM ad_group_ad
+WHERE campaign.id = 24141723281

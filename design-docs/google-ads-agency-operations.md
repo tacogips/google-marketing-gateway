@@ -71,7 +71,7 @@ The current repository baseline relevant to this feature is:
 | Executables | `Sources/GoogleMarketingGatewayReader/main.swift`, `Sources/GoogleMarketingGatewayWriter/main.swift`, `Sources/GoogleMarketingGatewayAdmin/main.swift` | Separate reader, writer, and admin modes delegate into shared core CLI. |
 | Gateway mode | `Sources/GoogleMarketingGatewayCore/GatewayModels.swift` | Capability is represented as `reader`, `writer`, or `admin`. |
 | Operation catalog | `Sources/GoogleMarketingGatewayCore/OperationCatalog.swift` | Implemented reader descriptors exist for Google Ads, Analytics Data, Search Console, AdSense, and AdMob; Google Trends is marked alpha allowlist required. |
-| Credential profiles | `Sources/GoogleMarketingGatewayCore/CredentialProfiles.swift` | Reader-only profile validation, exact reader scopes for implemented products, safe environment-variable references, Google Ads developer-token reference, and optional `loginCustomerId`. |
+| Credential profiles | `Sources/GoogleMarketingGatewayCore/CredentialProfiles.swift` | Capability-specific profile validation, exact scopes for implemented products, safe environment-variable references, Google Ads developer-token reference, and optional `loginCustomerIdEnvironmentVariable`. |
 | Google Ads requests | `Sources/GoogleMarketingGatewayCore/GoogleAdsRequests.swift` | Fixed `https://googleads.googleapis.com` v25 accessible-customer and GAQL search request construction with bearer, developer-token, and optional `login-customer-id` headers. |
 | CLI routing | `Sources/GoogleMarketingGatewayCore/GatewayCLI.swift` | Closed reader routes dispatch implemented operations through injected transport. |
 | Tests | `Tests/GoogleMarketingGatewayCoreTests/` | Deterministic request, CLI, profile, OAuth, catalog, and redaction tests for the implemented reader foundation. |
@@ -135,8 +135,8 @@ Google Ads continues to require:
 
 - OAuth scope: `https://www.googleapis.com/auth/adwords`.
 - Developer token: environment variable reference in the credential profile.
-- Optional `loginCustomerId`: digits only, max 20 bytes, configured in the
-  profile and not supplied per request.
+- Optional `loginCustomerIdEnvironmentVariable`: a safe environment-variable
+  name. Its runtime value must contain only digits and be at most 20 bytes.
 - Operating customer ID: digits only, max 20 bytes, supplied as route input.
 
 Because Google Ads exposes the same OAuth scope for reads and mutates, least
