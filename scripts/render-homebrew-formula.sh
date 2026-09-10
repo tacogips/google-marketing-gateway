@@ -76,16 +76,20 @@ class GoogleMarketingGateway < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "$release_base_url/$artifact_name-$version-darwin-arm.tar.gz"
+      url "$release_base_url/$artifact_name-$version-darwin-arm64.tar.gz"
       sha256 "$darwin_arm64_sha"
     else
-      url "$release_base_url/$artifact_name-$version-darwin-intel.tar.gz"
+      url "$release_base_url/$artifact_name-$version-darwin-x64.tar.gz"
       sha256 "$darwin_x64_sha"
     end
   end
 
   def install
     bin.install "bin/$product"
+    bin.install "bin/google-marketing-gateway-reader"
+    bin.install "bin/google-marketing-gateway-writer"
+    bin.install "bin/google-marketing-gateway-deleter"
+    bin.install "bin/google-marketing-gateway-admin"
   end
 
   test do
