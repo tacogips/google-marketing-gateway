@@ -1,5 +1,11 @@
 # google-marketing-gateway
 
+An access token in the profile's `accessTokenEnvironmentVariable` overrides its
+OAuth token file. Login reports the written file and the exact variable to unset
+before subsequent commands can use that grant. Auth status follows the same
+precedence as requests, and credential errors identify the selected source without
+printing token values. Selecting an explicit config does not disable token overrides.
+
 A Swift 6 command-line gateway for official Google marketing APIs. The package
 uses a shared core and capability-separated executables modeled on
 `mail-gateway`:

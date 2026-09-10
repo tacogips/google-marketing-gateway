@@ -199,12 +199,12 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       accessToken = try credentialResolver.accessToken(profile: profile, environment: environment)
     } catch let error as GatewayError {
       throw GatewayError(
-        "Credential resolution failed",
+        "Credential resolution failed: \(profile.tokenSourceDiagnostic(environment: environment))",
         code: error.code,
         exitCode: error.exitCode
       )
     } catch {
-      throw GatewayError("Credential resolution failed", code: .missingCredential, exitCode: 2)
+      throw GatewayError("Credential resolution failed: \(profile.tokenSourceDiagnostic(environment: environment))", code: .missingCredential, exitCode: 2)
     }
     let developerToken = try developerToken(profile: profile, environment: environment)
     let loginCustomerId = try GoogleAdsMutationSupport.loginCustomerId(

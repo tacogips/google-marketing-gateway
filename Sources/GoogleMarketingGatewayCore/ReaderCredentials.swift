@@ -24,6 +24,14 @@ public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
   }
 
   public func accessToken(profile: CredentialProfile, environment: [String: String]) throws -> String {
+    do {
+      return try selectedAccessToken(profile: profile, environment: environment)
+    } catch let error as GatewayError {
+      throw GatewayError("Credential resolution failed: \(profile.tokenSourceDiagnostic(environment: environment))", code: error.code, exitCode: error.exitCode)
+    }
+  }
+
+  private func selectedAccessToken(profile: CredentialProfile, environment: [String: String]) throws -> String {
     if let token = environment[profile.accessTokenEnvironmentVariable]?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
       return token
     }
@@ -48,6 +56,13 @@ public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
   public func status(profile: CredentialProfile, environment: [String: String]) -> ReaderAuthStatus {
     let environmentTokenAvailable = !(environment[profile.accessTokenEnvironmentVariable] ?? "")
       .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    if environmentTokenAvailable {
+      return ReaderAuthStatus(
+        profile: profile, environmentTokenAvailable: true,
+        tokenStoreExists: profile.tokenStorePath.map { SecureLocalFiles.pathEntryExists(path: $0) } ?? false,
+        state: "ready", expiresAt: nil, hasRefreshToken: false
+      )
+    }
     let configuredPath = profile.tokenStorePath
     guard let path = configuredPath else {
       return ReaderAuthStatus(profile: profile, environmentTokenAvailable: environmentTokenAvailable, tokenStoreExists: false, state: environmentTokenAvailable ? "ready" : "missing", expiresAt: nil, hasRefreshToken: false)
@@ -101,6 +116,9 @@ public struct ReaderAuthStatus: Encodable, Equatable, Sendable {
   public let state: String
   public let expiresAt: Date?
   public let hasRefreshToken: Bool
+  public let tokenSource: String
+  public let tokenEnvironmentVariable: String?
+  public let tokenStorePath: String?
 
   init(
     profile: CredentialProfile,
@@ -119,5 +137,8 @@ public struct ReaderAuthStatus: Encodable, Equatable, Sendable {
     self.state = state
     self.expiresAt = expiresAt
     self.hasRefreshToken = hasRefreshToken
+    tokenSource = environmentTokenAvailable ? "ENVIRONMENT_TOKEN" : "FILE"
+    tokenEnvironmentVariable = environmentTokenAvailable ? profile.accessTokenEnvironmentVariable : nil
+    tokenStorePath = environmentTokenAvailable ? nil : profile.tokenStorePath
   }
 }

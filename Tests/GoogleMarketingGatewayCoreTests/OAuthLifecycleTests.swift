@@ -234,7 +234,9 @@ import Testing
   let status = ReaderCredentialResolver().status(profile: profile, environment: [profile.accessTokenEnvironmentVariable: "environment-token"])
   #expect(status.environmentTokenAvailable)
   #expect(status.tokenStoreExists)
-  #expect(status.state == "invalid")
+  #expect(status.state == "ready")
+  #expect(status.tokenSource == "ENVIRONMENT_TOKEN")
+  #expect(ReaderCredentialResolver().status(profile: profile, environment: [:]).state == "invalid")
 }
 
 @Test func authLoginUsesInjectedTokenStoreAndSurfacesPersistenceFailure() throws {
@@ -251,7 +253,11 @@ import Testing
     randomString: { String(repeating: "s", count: $0) },
     tokenStore: recorder
   )
-  #expect(try service.login(profile: profile, noBrowser: false, redirectURI: nil, timeoutSeconds: 1).state == "ready")
+  let login = try service.login(profile: profile, noBrowser: false, redirectURI: nil, timeoutSeconds: 1)
+  #expect(login.state == "ready")
+  #expect(login.tokenSource == "FILE")
+  #expect(login.tokenStorePath == profile.tokenStorePath)
+  #expect(login.tokenSourceHint?.contains("Unset OAUTH_TEST_TOKEN") == true)
   #expect(opened.count == 1)
   #expect(recorder.writeCount == 1)
   let failing = TokenStoreSpy(writeError: GatewayError("persistence failed", code: .invalidConfiguration))

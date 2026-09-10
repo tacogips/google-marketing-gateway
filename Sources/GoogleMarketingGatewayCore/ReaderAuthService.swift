@@ -11,6 +11,18 @@ public struct ReaderAuthLoginOutput: Encodable, Equatable, Sendable {
   public let profileId: String
   public let state: String
   public let authorizationURL: String?
+  public let tokenSource: String
+  public let tokenStorePath: String?
+  public let tokenSourceHint: String?
+
+  public init(profileId: String, state: String, authorizationURL: String?, tokenStorePath: String? = nil, tokenSourceHint: String? = nil) {
+    self.profileId = profileId
+    self.state = state
+    self.authorizationURL = authorizationURL
+    tokenSource = "FILE"
+    self.tokenStorePath = tokenStorePath
+    self.tokenSourceHint = tokenSourceHint
+  }
 }
 
 public struct ReaderAuthService: ReaderAuthManaging, Sendable {
@@ -53,7 +65,10 @@ public struct ReaderAuthService: ReaderAuthManaging, Sendable {
     let code = try receiver.waitForCode(expectedState: state, timeoutSeconds: timeoutSeconds)
     let token = try oauth.exchange(clientPath: clientPath, code: code, verifier: verifier, redirectURI: receiver.redirectURI, profile: profile)
     try tokenStore.write(token, path: storePath, profile: profile)
-    return ReaderAuthLoginOutput(profileId: profile.id, state: "ready", authorizationURL: nil)
+    return ReaderAuthLoginOutput(
+      profileId: profile.id, state: "ready", authorizationURL: nil, tokenStorePath: storePath,
+      tokenSourceHint: "Unset \(profile.accessTokenEnvironmentVariable) and select this profile/configuration to use the written token; environment access tokens override the token store."
+    )
   }
   public static func defaultRandomString(length: Int) throws -> String {
     guard length > 0 else { throw GatewayError("OAuth random value length is invalid", code: .invalidArgument, exitCode: 2) }
