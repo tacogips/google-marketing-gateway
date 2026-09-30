@@ -13,16 +13,17 @@ let package = Package(
     .executable(name: "google-marketing-gateway-deleter", targets: ["GoogleMarketingGatewayDeleter"]),
     .executable(name: "google-marketing-gateway-admin", targets: ["GoogleMarketingGatewayAdmin"])
   ],
+  dependencies: [.package(url: "https://github.com/tacogips/google-gateway-auth.git", revision: "dda86daa5ca1b9a761977e4a9891e4e4380cf4dd")],
   targets: [
     .target(name: "GoogleMarketingGatewayCore"),
     .executableTarget(
       name: "GoogleMarketingGatewayCompatibility",
-      dependencies: ["GoogleMarketingGatewayCore"]
+      dependencies: [.product(name: "GoogleGatewayAuth", package: "google-gateway-auth"), "GoogleMarketingGatewayCore"]
     ),
-    .executableTarget(name: "GoogleMarketingGatewayReader", dependencies: ["GoogleMarketingGatewayCore"]),
-    .executableTarget(name: "GoogleMarketingGatewayWriter", dependencies: ["GoogleMarketingGatewayCore"]),
-    .executableTarget(name: "GoogleMarketingGatewayDeleter", dependencies: ["GoogleMarketingGatewayCore"]),
-    .executableTarget(name: "GoogleMarketingGatewayAdmin", dependencies: ["GoogleMarketingGatewayCore"]),
+    .executableTarget(name: "GoogleMarketingGatewayReader", dependencies: [.product(name: "GoogleGatewayAuth", package: "google-gateway-auth"), "GoogleMarketingGatewayCore"]),
+    .executableTarget(name: "GoogleMarketingGatewayWriter", dependencies: [.product(name: "GoogleGatewayAuth", package: "google-gateway-auth"), "GoogleMarketingGatewayCore"]),
+    .executableTarget(name: "GoogleMarketingGatewayDeleter", dependencies: [.product(name: "GoogleGatewayAuth", package: "google-gateway-auth"), "GoogleMarketingGatewayCore"]),
+    .executableTarget(name: "GoogleMarketingGatewayAdmin", dependencies: [.product(name: "GoogleGatewayAuth", package: "google-gateway-auth"), "GoogleMarketingGatewayCore"]),
     .testTarget(
       name: "GoogleMarketingGatewayCoreTests",
       dependencies: ["GoogleMarketingGatewayCore"],
