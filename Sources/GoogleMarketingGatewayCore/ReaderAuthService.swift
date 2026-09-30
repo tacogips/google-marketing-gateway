@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import GoogleGatewayAuth
 
 public protocol ReaderAuthManaging: Sendable {
   func status(profile: CredentialProfile, environment: [String: String]) -> ReaderAuthStatus
@@ -51,17 +52,29 @@ public struct ReaderAuthService: ReaderAuthManaging, Sendable {
   public func status(profile: CredentialProfile, environment: [String: String]) -> ReaderAuthStatus { resolver.status(profile: profile, environment: environment) }
   public func logout(profile: CredentialProfile) throws -> Bool { try resolver.logout(profile: profile) }
   public func login(profile: CredentialProfile, noBrowser: Bool, redirectURI: String? = nil, timeoutSeconds: Int32 = 300) throws -> ReaderAuthLoginOutput {
+    do {
+      return try performLogin(profile: profile, noBrowser: noBrowser, redirectURI: redirectURI, timeoutSeconds: timeoutSeconds)
+    } catch let error as GatewayAuthError {
+      throw GatewayError(error.description, code: error.kind == .configuration ? .invalidConfiguration : .transportFailure, exitCode: 2)
+    }
+  }
+  private func performLogin(profile: CredentialProfile, noBrowser: Bool, redirectURI: String?, timeoutSeconds: Int32) throws -> ReaderAuthLoginOutput {
     guard let storePath = profile.tokenStorePath else {
       throw GatewayError("Selected profile does not support installed OAuth login", code: .invalidProfile, exitCode: 2)
     }
     let client = try oauth.loadClient(profile: profile)
     try SecureLocalFiles.ensurePrivateParent(ofPath: storePath)
-    let receiver = try makeReceiver(redirectURI)
+    let receiver: any OAuthLoopbackReceiving
+    if client.kind == "web" || OAuthCallbackSettings.isConfigured(prefix: "GOOGLE_MARKETING_GATEWAY_") {
+      let settings = try OAuthCallbackSettings(prefix: "GOOGLE_MARKETING_GATEWAY_", requestedURI: redirectURI
+        ?? (client.kind == "web" && !OAuthCallbackSettings.isConfigured(prefix: "GOOGLE_MARKETING_GATEWAY_") ? client.redirectUris.first : nil))
+      receiver = ConfiguredOAuthReceiver(server: try OAuthCallbackServer(settings: settings))
+    } else { receiver = try makeReceiver(redirectURI) }
     let state = try randomString(43)
     let verifier = try randomString(64)
     let url = try OAuthPKCE.authorizationURL(client: client, scopes: profile.oauthScopes, redirectURI: receiver.redirectURI, state: state, verifier: verifier)
     if noBrowser {
-      FileHandle.standardOutput.write(Data((url.absoluteString + "\n").utf8))
+      FileHandle.standardError.write(Data((url.absoluteString + "\n").utf8))
     } else if !openURL(url) {
       throw GatewayError("Unable to open OAuth authorization URL", code: .transportFailure, exitCode: 2)
     }
@@ -78,5 +91,15 @@ public struct ReaderAuthService: ReaderAuthManaging, Sendable {
     let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
     var generator = SystemRandomNumberGenerator()
     return String((0..<length).map { _ in alphabet[Int.random(in: alphabet.indices, using: &generator)] })
+  }
+}
+
+private struct ConfiguredOAuthReceiver: OAuthLoopbackReceiving {
+  let server: OAuthCallbackServer
+  var redirectURI: String { server.redirectURI.absoluteString }
+  func waitForCode(expectedState: String, timeoutSeconds: Int32) throws -> String {
+    let callback = try server.wait(expectedState: expectedState, timeout: TimeInterval(timeoutSeconds))
+    guard callback.error == nil, let code = callback.code else { throw GatewayAuthError("OAuth authorization failed") }
+    return code
   }
 }

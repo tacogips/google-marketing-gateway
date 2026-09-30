@@ -16,7 +16,7 @@ import Testing
 
 @Test func desktopClientAndTokenStoreRejectUnknownOrUnboundedSchema() throws {
   let unknownRoot = Data(#"{"installed":{"client_id":"id","auth_uri":"https://accounts.google.com/o/oauth2/v2/auth","token_uri":"https://oauth2.googleapis.com/token","redirect_uris":[]},"web":{}}"#.utf8)
-  let unknownInstalled = Data(#"{"installed":{"client_id":"id","auth_uri":"https://accounts.google.com/o/oauth2/v2/auth","token_uri":"https://oauth2.googleapis.com/token","redirect_uris":[],"project_id":"unexpected"}}"#.utf8)
+  let unknownInstalled = Data(#"{"installed":{"client_id":"id","auth_uri":"https://accounts.google.com/o/oauth2/v2/auth","token_uri":"https://oauth2.googleapis.com/token","redirect_uris":[],"unsupported_attribute":"unexpected"}}"#.utf8)
   let redirects = Array(repeating: "http://127.0.0.1", count: 33)
   let oversizedRedirects = try JSONSerialization.data(withJSONObject: [
     "installed": [
