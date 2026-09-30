@@ -32,7 +32,7 @@ public struct GoogleMarketingGatewayCLI: Sendable {
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) async -> GatewayCommandResult {
     do {
-      if arguments.isEmpty || arguments.contains("--help") || arguments.contains("-h") {
+      if arguments.isEmpty || arguments == ["auth"] || arguments.contains("--help") || arguments.contains("-h") {
         return GatewayCommandResult(exitCode: 0, stdout: usage)
       }
       if arguments == ["--version"] || arguments == ["version"] {
