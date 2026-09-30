@@ -51,8 +51,11 @@ public struct ReaderAuthService: ReaderAuthManaging, Sendable {
   public func status(profile: CredentialProfile, environment: [String: String]) -> ReaderAuthStatus { resolver.status(profile: profile, environment: environment) }
   public func logout(profile: CredentialProfile) throws -> Bool { try resolver.logout(profile: profile) }
   public func login(profile: CredentialProfile, noBrowser: Bool, redirectURI: String? = nil, timeoutSeconds: Int32 = 300) throws -> ReaderAuthLoginOutput {
-    guard let clientPath = profile.oauthClientJSONPath, let storePath = profile.tokenStorePath else { throw GatewayError("Selected profile does not support installed OAuth login", code: .invalidProfile, exitCode: 2) }
-    let client = try oauth.loadClient(path: clientPath)
+    guard let storePath = profile.tokenStorePath else {
+      throw GatewayError("Selected profile does not support installed OAuth login", code: .invalidProfile, exitCode: 2)
+    }
+    let client = try oauth.loadClient(profile: profile)
+    try SecureLocalFiles.ensurePrivateParent(ofPath: storePath)
     let receiver = try makeReceiver(redirectURI)
     let state = try randomString(43)
     let verifier = try randomString(64)
@@ -63,7 +66,7 @@ public struct ReaderAuthService: ReaderAuthManaging, Sendable {
       throw GatewayError("Unable to open OAuth authorization URL", code: .transportFailure, exitCode: 2)
     }
     let code = try receiver.waitForCode(expectedState: state, timeoutSeconds: timeoutSeconds)
-    let token = try oauth.exchange(clientPath: clientPath, code: code, verifier: verifier, redirectURI: receiver.redirectURI, profile: profile)
+    let token = try oauth.exchange(client: client, code: code, verifier: verifier, redirectURI: receiver.redirectURI, profile: profile)
     try tokenStore.write(token, path: storePath, profile: profile)
     return ReaderAuthLoginOutput(
       profileId: profile.id, state: "ready", authorizationURL: nil, tokenStorePath: storePath,

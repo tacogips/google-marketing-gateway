@@ -39,16 +39,7 @@ enum GoogleAdsMutationSupport {
     flags: [String: String],
     environment: [String: String]
   ) throws -> CredentialProfile {
-    let path = flags["config"] ?? environment["GOOGLE_MARKETING_GATEWAY_CONFIG"]
-    guard let path else {
-      throw GatewayError(
-        "--config or GOOGLE_MARKETING_GATEWAY_CONFIG is required",
-        code: .invalidConfiguration,
-        exitCode: 2
-      )
-    }
-    let selected = try CredentialProfileConfiguration.load(path: path)
-      .profile(id: required(flags, "profile"))
+    let selected = try MarketingDefaultCredentials.profile(product: .googleAds, capability: capability, flags: flags, environment: environment)
     guard selected.product == .googleAds,
       selected.capability == capability,
       selected.oauthScopes == [scope] else {
@@ -68,7 +59,7 @@ enum GoogleAdsMutationSupport {
   ) throws -> (accessToken: String, developerToken: String) {
     let accessToken = try resolver.accessToken(profile: profile, environment: environment)
     guard let developerName = profile.developerTokenEnvironmentVariable,
-      let developerToken = environment[developerName],
+      let developerToken = try marketingCredentialValue(profile: profile, suffix: "DEVELOPER_TOKEN", alias: developerName, environment: environment),
       HTTPHeaderValue.isCredential(developerToken, maximumBytes: 4_096) else {
       throw GatewayError("Google Ads developer token is unavailable", code: .missingCredential, exitCode: 2)
     }

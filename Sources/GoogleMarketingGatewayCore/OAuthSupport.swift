@@ -193,7 +193,7 @@ public struct OAuthTokenStore: OAuthTokenStoring, Sendable {
     }
   }
 
-  private func decode(_ data: Data, profile: CredentialProfile) throws -> OAuthToken {
+  func decode(_ data: Data, profile: CredentialProfile) throws -> OAuthToken {
     let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
     let token = try decoder.decode(OAuthToken.self, from: data)
     guard token.profileId == profile.id, token.product == profile.product, Set(token.scopes) == Set(profile.oauthScopes), token.scopes.count == profile.oauthScopes.count else {

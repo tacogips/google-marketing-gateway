@@ -41,6 +41,15 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       if arguments == ["catalog"] {
         return GatewayCommandResult(exitCode: 0, stdout: try OperationCatalog.encoded())
       }
+      if Array(arguments.prefix(2)) == ["auth", "status"] {
+        return try authStatus(arguments: Array(arguments.dropFirst(2)), environment: environment)
+      }
+      if Array(arguments.prefix(2)) == ["auth", "logout"] {
+        return try authLogout(arguments: Array(arguments.dropFirst(2)), environment: environment)
+      }
+      if Array(arguments.prefix(2)) == ["auth", "login"] {
+        return try authLogin(arguments: Array(arguments.dropFirst(2)), environment: environment)
+      }
       if mode == .writer {
         if Array(arguments.prefix(2)) == ["google-ads", "search-campaigns"] {
           return try await googleAdsWriterCommand.run(arguments: arguments, environment: environment)
@@ -76,15 +85,6 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       if Array(arguments.prefix(2)) == ["config", "status"] {
         return try configStatus(arguments: Array(arguments.dropFirst(2)), environment: environment)
       }
-      if Array(arguments.prefix(2)) == ["auth", "status"] {
-        return try authStatus(arguments: Array(arguments.dropFirst(2)), environment: environment)
-      }
-      if Array(arguments.prefix(2)) == ["auth", "logout"] {
-        return try authLogout(arguments: Array(arguments.dropFirst(2)), environment: environment)
-      }
-      if Array(arguments.prefix(2)) == ["auth", "login"] {
-        return try authLogin(arguments: Array(arguments.dropFirst(2)), environment: environment)
-      }
       return try await runReader(arguments: arguments, environment: environment)
     } catch let error as GatewayError {
       return errorResult(error)
@@ -101,13 +101,15 @@ public struct GoogleMarketingGatewayCLI: Sendable {
       "  catalog                              Print supported operations and OAuth scopes",
       "  version                              Print version"
     ]
+    lines += [
+      "  auth login [--product <name>] [--profile <id>] [--config <path>] [--no-browser] [--timeout-seconds <1...600>]",
+      "  auth status [--product <name>] [--profile <id>] [--config <path>]",
+      "  auth logout [--product <name>] [--profile <id>] [--config <path>]"
+    ]
     if mode == .reader {
       lines += [
         "  config validate --config <path>      Validate profiles without reading tokens",
         "  config status --config <path>        Print token availability without token values",
-        "  auth login --profile <id> --config <path> [--no-browser] [--redirect-uri <loopback-uri>] [--timeout-seconds <1...600>]",
-        "  auth status --profile <id> --config <path>",
-        "  auth logout --profile <id> --config <path>",
         "  google-ads accessible-customers list",
         "  google-ads search --customer-id <digits> --query-file <path> [--page-token <token>]",
         "  google-ads customer-client-links list --customer-id <digits> [--page-token <token>]",
@@ -530,8 +532,7 @@ public struct GoogleMarketingGatewayCLI: Sendable {
     operationID: String,
     product: MarketingProduct
   ) throws -> CredentialProfile {
-    let configuration = try loadConfiguration(flags: flags, environment: environment)
-    let profile = try configuration.profile(id: requiredFlag(flags, "profile"))
+    let profile = try MarketingDefaultCredentials.profile(product: product, capability: .reader, flags: flags, environment: environment)
     guard profile.product == product, profile.capability == .reader else {
       throw GatewayError("Credential profile does not match the reader operation", code: .invalidProfile, exitCode: 2)
     }
@@ -574,22 +575,54 @@ public struct GoogleMarketingGatewayCLI: Sendable {
     return GatewayCommandResult(exitCode: 0, stdout: try encodedJSON(ConfigStatusOutput(profiles: statuses)))
   }
 
+  private func authProfile(flags: [String: String], environment: [String: String]) throws -> CredentialProfile {
+    if flags["config"] == nil && environment["GOOGLE_MARKETING_GATEWAY_CONFIG"] == nil {
+      guard let product = MarketingProduct(rawValue: flags["product"] ?? "google-ads") else {
+        throw GatewayError("Unknown auth product", code: .invalidArgument, exitCode: 2)
+      }
+      return try MarketingDefaultCredentials.profile(product: product, capability: mode, flags: flags, environment: environment)
+    }
+    let configuration = try loadConfiguration(flags: flags, environment: environment)
+    let profile: CredentialProfile
+    if let id = flags["profile"] {
+      profile = try configuration.profile(id: id)
+    } else {
+      let matching = configuration.profiles.filter { $0.capability == mode }
+      guard matching.count == 1, let selected = matching.first else {
+        throw GatewayError("Select --profile; configuration has no unique profile for this command", code: .invalidProfile, exitCode: 2)
+      }
+      profile = selected
+    }
+    if let value = flags["product"], profile.product.rawValue != value {
+      throw GatewayError("Auth product does not match the selected profile", code: .invalidProfile, exitCode: 2)
+    }
+    guard profile.capability == mode else {
+      throw GatewayError("Auth profile capability must match this executable", code: .forbiddenCapability, exitCode: 2)
+    }
+    let selected = try marketingProfilePaths(profile, environment: environment)
+    if let configPath = flags["config"] ?? environment["GOOGLE_MARKETING_GATEWAY_CONFIG"], let tokenPath = selected.tokenStorePath,
+       URL(fileURLWithPath: configPath).standardizedFileURL == URL(fileURLWithPath: tokenPath).standardizedFileURL {
+      throw GatewayError("Token-store path must differ from configuration path", code: .invalidConfiguration, exitCode: 2)
+    }
+    return selected
+  }
+
   private func authStatus(arguments: [String], environment: [String: String]) throws -> GatewayCommandResult {
-    let flags = try parseFlags(arguments, allowedNames: ["config", "profile"])
-    let profile = try loadConfiguration(flags: flags, environment: environment).profile(id: requiredFlag(flags, "profile"))
+    let flags = try parseFlags(arguments, allowedNames: ["config", "profile", "product"])
+    let profile = try authProfile(flags: flags, environment: environment)
     return GatewayCommandResult(exitCode: 0, stdout: try encodedJSON(authManager.status(profile: profile, environment: environment)))
   }
 
   private func authLogout(arguments: [String], environment: [String: String]) throws -> GatewayCommandResult {
-    let flags = try parseFlags(arguments, allowedNames: ["config", "profile"])
-    let profile = try loadConfiguration(flags: flags, environment: environment).profile(id: requiredFlag(flags, "profile"))
+    let flags = try parseFlags(arguments, allowedNames: ["config", "profile", "product"])
+    let profile = try authProfile(flags: flags, environment: environment)
     let deleted = try authManager.logout(profile: profile)
     return GatewayCommandResult(exitCode: 0, stdout: try encodedJSON(LogoutOutput(profileId: profile.id, product: profile.product, removed: deleted)))
   }
 
   private func authLogin(arguments: [String], environment: [String: String]) throws -> GatewayCommandResult {
-    let flags = try parseFlags(arguments, allowedNames: ["config", "profile", "no-browser", "redirect-uri", "timeout-seconds"])
-    let profile = try loadConfiguration(flags: flags, environment: environment).profile(id: requiredFlag(flags, "profile"))
+    let flags = try parseFlags(arguments, allowedNames: ["config", "profile", "product", "no-browser", "redirect-uri", "timeout-seconds"])
+    let profile = try authProfile(flags: flags, environment: environment)
     let timeoutSeconds = try intFlag(flags, "timeout-seconds") ?? 300
     guard (1...600).contains(timeoutSeconds) else { throw GatewayError("OAuth callback timeout is invalid", code: .invalidArgument, exitCode: 2) }
     return GatewayCommandResult(exitCode: 0, stdout: try encodedJSON(authManager.login(profile: profile, noBrowser: flags["no-browser"] != nil, redirectURI: flags["redirect-uri"], timeoutSeconds: Int32(timeoutSeconds))))
@@ -598,7 +631,8 @@ public struct GoogleMarketingGatewayCLI: Sendable {
   private func developerToken(profile: CredentialProfile, environment: [String: String]) throws -> String? {
     guard profile.product == .googleAds else { return nil }
     guard let variable = profile.developerTokenEnvironmentVariable,
-      let value = environment[variable], !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      let value = try marketingCredentialValue(profile: profile, suffix: "DEVELOPER_TOKEN", alias: variable, environment: environment),
+      !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw GatewayError("Google Ads developer token environment value is required", code: .missingCredential, exitCode: 2)
     }
     return value

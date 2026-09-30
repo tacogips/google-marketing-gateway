@@ -382,3 +382,60 @@ deferred writer/admin work.
 The existing Formula and Cask automation still packages the compatibility
 executable. A later packaging slice will install all three capability binaries.
 See `packaging/homebrew/README.md` for the current release workflow.
+
+## External credentials and common environment names
+
+`auth login` is optional when credentials have already been obtained elsewhere.
+With a selected profile, ordinary requests accept:
+
+- `GOOGLE_MARKETING_GATEWAY_ACCESS_TOKEN`: the access token string.
+- `GOOGLE_MARKETING_GATEWAY_TOKEN_STORE_JSON`: token-store JSON contents.
+- `GOOGLE_MARKETING_GATEWAY_TOKEN_STORE_PATH`: a token-store file path.
+- `GOOGLE_MARKETING_GATEWAY_OAUTH_CLIENT_PATH`: a client file for login or refresh.
+- `GOOGLE_MARKETING_GATEWAY_DEVELOPER_TOKEN`: the Google Ads developer token.
+
+Profile-specific variables use
+`GOOGLE_MARKETING_GATEWAY_CREDENTIAL_<NORMALIZED_ID>_<SUFFIX>`; uppercase IDs and
+replace hyphens with underscores. Profile inputs override product defaults.
+Configured access-token/developer-token variable references remain supported as
+aliases. Conflicting canonical/alias values and ambiguous token inputs fail
+without printing credential values. Token stores retain profile, product, scope,
+expiry, and private-file checks. A fresh externally supplied token needs no OAuth
+client. Inline token JSON is immutable; replace it when expired.
+
+The reader, writer, admin, and deleter all accept `auth login`, `auth status`, and
+`auth logout`. Auth profiles must match the executable capability. `--profile`
+can be omitted when the config contains exactly one profile for that capability.
+Application registration and config are still required for browser login; the
+shared distribution client integration is unfinished.
+
+OAuth application JSON supplied through `OAUTH_CLIENT_JSON` stays in memory and
+uses the same desktop-client validation as `OAUTH_CLIENT_PATH`. Login and refresh
+accept either source. Supplying both for the selected profile is an error.
+Application JSON is excluded from serialized profile configuration.
+
+### Login without a configuration file
+
+`google-marketing-gateway-reader auth login` now selects the default Google Ads
+reader profile. Writer/admin/deleter select their own Google Ads profiles. Use
+`--product admob`, `adsense`, `search-console`, or `analytics-data` for an
+implemented reader product; AdMob also has a writer profile. Unsupported
+product/role combinations fail before browser or API activity. Existing
+`--config` and `--profile` remain supported; an explicitly named configuration
+must load successfully and never falls back to an unrelated default.
+
+Default IDs are `<product>-<role>`. Login and ordinary requests select the same
+profile; ordinary command families infer the product from the command itself.
+Saved credentials live under
+`$XDG_STATE_HOME/google-marketing-gateway/credentials/<product>/<role>/<id>.json`,
+or `~/.local/state/google-marketing-gateway/credentials/...` when unset.
+Parents are created privately before authorization; stored tokens use mode 0600.
+A registered desktop application client is still required until a distribution
+client is supplied. Google Ads requests also require the developer token.
+
+Fresh external token values or token stores remain usable without login or
+application input. For example, the reader's `google-ads accessible-customers
+list` command accepts canonical access/developer-token variables without a
+profile configuration. Profile token source inputs replace product token defaults
+as a group, so a profile token value is not combined with a default token path.
+Profile application inputs follow the same precedence rule.

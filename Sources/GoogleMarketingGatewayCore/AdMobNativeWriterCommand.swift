@@ -34,9 +34,7 @@ public struct AdMobNativeWriterCommand: Sendable {
   }
 
   private func writerProfile(flags: [String: String], environment: [String: String]) throws -> CredentialProfile {
-    let path = flags["config"] ?? environment["GOOGLE_MARKETING_GATEWAY_CONFIG"]
-    guard let path else { throw GatewayError("--config or GOOGLE_MARKETING_GATEWAY_CONFIG is required", code: .invalidConfiguration, exitCode: 2) }
-    let profile = try CredentialProfileConfiguration.load(path: path).profile(id: required(flags, "profile"))
+    let profile = try MarketingDefaultCredentials.profile(product: .admob, capability: .writer, flags: flags, environment: environment)
     let expectedScope = "https://www.googleapis.com/auth/admob.monetization"
     guard profile.product == .admob, profile.capability == .writer, profile.oauthScopes == [expectedScope] else {
       throw GatewayError("Writer profile does not match the AdMob Native create operation", code: .invalidProfile, exitCode: 2)

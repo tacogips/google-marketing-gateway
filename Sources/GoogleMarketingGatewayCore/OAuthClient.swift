@@ -58,20 +58,41 @@ public struct OAuthClient: OAuthTokenRefreshing, Sendable {
   public init(http: any OAuthHTTPHandling = URLSessionOAuthHTTP(), now: @escaping @Sendable () -> Date = Date.init) { self.http = http; self.now = now }
 
   public func refresh(clientPath: String, token: OAuthToken, requiredScopes: [String]) throws -> OAuthToken {
+    try refresh(client: loadClient(path: clientPath), token: token, requiredScopes: requiredScopes)
+  }
+
+  public func refresh(client: OAuthDesktopClient, token: OAuthToken, requiredScopes: [String]) throws -> OAuthToken {
     guard let refreshToken = token.refreshToken, !refreshToken.isEmpty else { throw GatewayError("OAuth token cannot be refreshed", code: .missingCredential, exitCode: 2) }
-    let client = try loadClient(path: clientPath)
     let response = try tokenRequest(client: client, values: ["grant_type": "refresh_token", "refresh_token": refreshToken])
     return try makeToken(response: response, profile: token.profile, fallbackRefreshToken: refreshToken, requiredScopes: requiredScopes)
   }
 
   public func exchange(clientPath: String, code: String, verifier: String, redirectURI: String, profile: CredentialProfile) throws -> OAuthToken {
-    let client = try loadClient(path: clientPath)
+    try exchange(client: loadClient(path: clientPath), code: code, verifier: verifier, redirectURI: redirectURI, profile: profile)
+  }
+
+  public func exchange(client: OAuthDesktopClient, code: String, verifier: String, redirectURI: String, profile: CredentialProfile) throws -> OAuthToken {
     let response = try tokenRequest(client: client, values: ["grant_type": "authorization_code", "code": code, "code_verifier": verifier, "redirect_uri": redirectURI])
     let token = try makeToken(response: response, profile: profile, fallbackRefreshToken: nil, requiredScopes: profile.oauthScopes)
     guard let refreshToken = token.refreshToken, !refreshToken.isEmpty else {
       throw GatewayError("OAuth token response is invalid", code: .invalidResponse, exitCode: 2)
     }
     return token
+  }
+
+  public func loadClient(json: String) throws -> OAuthDesktopClient {
+    guard json.utf8.count <= 1_048_576 else {
+      throw GatewayError("OAuth client JSON is too large", code: .invalidConfiguration, exitCode: 2)
+    }
+    do { return try JSONDecoder().decode(OAuthDesktopClient.self, from: Data(json.utf8)) } catch {
+      throw GatewayError("OAuth client JSON is invalid", code: .invalidConfiguration, exitCode: 2)
+    }
+  }
+
+  public func loadClient(profile: CredentialProfile) throws -> OAuthDesktopClient {
+    if let json = profile.oauthClientJSON { return try loadClient(json: json) }
+    if let path = profile.oauthClientJSONPath { return try loadClient(path: path) }
+    throw GatewayError("OAuth application client is missing", code: .invalidConfiguration, exitCode: 2)
   }
 
   public func loadClient(path: String) throws -> OAuthDesktopClient {

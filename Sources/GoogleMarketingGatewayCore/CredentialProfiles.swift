@@ -6,6 +6,8 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
   public let capability: GatewayMode
   public let oauthScopes: [String]
   public let accessTokenEnvironmentVariable: String
+  /// Call-scoped application JSON. Excluded from configuration encoding.
+  public let oauthClientJSON: String?
   public let oauthClientJSONPath: String?
   public let tokenStorePath: String?
   public let developerTokenEnvironmentVariable: String?
@@ -17,6 +19,7 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
     capability: GatewayMode,
     oauthScopes: [String],
     accessTokenEnvironmentVariable: String,
+    oauthClientJSON: String? = nil,
     oauthClientJSONPath: String? = nil,
     tokenStorePath: String? = nil,
     developerTokenEnvironmentVariable: String? = nil,
@@ -27,6 +30,7 @@ public struct CredentialProfile: Codable, Equatable, Sendable {
     self.capability = capability
     self.oauthScopes = oauthScopes
     self.accessTokenEnvironmentVariable = accessTokenEnvironmentVariable
+    self.oauthClientJSON = oauthClientJSON
     self.oauthClientJSONPath = oauthClientJSONPath
     self.tokenStorePath = tokenStorePath
     self.developerTokenEnvironmentVariable = developerTokenEnvironmentVariable
@@ -163,9 +167,14 @@ public struct CredentialProfileConfiguration: Codable, Equatable, Sendable {
   private func validate() throws {
     guard !profiles.isEmpty else { throw configurationError("At least one credential profile is required") }
     var ids = Set<String>()
+    var environmentIDs = Set<String>()
     for profile in profiles {
       guard Self.isSafeProfileID(profile.id), ids.insert(profile.id).inserted else {
         throw configurationError("Credential profile id is invalid or duplicated")
+      }
+      let environmentID = profile.id.uppercased().replacingOccurrences(of: "-", with: "_")
+      guard environmentIDs.insert(environmentID).inserted else {
+        throw configurationError("Credential profile ids collide after environment-name normalization")
       }
       let configuredScopes = Set(profile.oauthScopes)
       guard !configuredScopes.isEmpty, configuredScopes.count == profile.oauthScopes.count else {
@@ -204,8 +213,8 @@ public struct CredentialProfileConfiguration: Codable, Equatable, Sendable {
       }
       let clientPath = profile.oauthClientJSONPath
       let storePath = profile.tokenStorePath
-      guard (clientPath == nil) == (storePath == nil) else {
-        throw configurationError("OAuth client and token-store paths must be configured together")
+      guard clientPath == nil || storePath != nil else {
+        throw configurationError("OAuth client login requires a token-store path")
       }
       if let clientPath, !Self.isSafePath(clientPath) { throw configurationError("OAuth client path is unsafe") }
       if let storePath, !Self.isSafePath(storePath) { throw configurationError("Token-store path is unsafe") }

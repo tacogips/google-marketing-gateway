@@ -6,6 +6,13 @@ public protocol ReaderCredentialResolving: Sendable {
 
 public protocol OAuthTokenRefreshing: Sendable {
   func refresh(clientPath: String, token: OAuthToken, requiredScopes: [String]) throws -> OAuthToken
+  func refresh(client: OAuthDesktopClient, token: OAuthToken, requiredScopes: [String]) throws -> OAuthToken
+}
+
+public extension OAuthTokenRefreshing {
+  func refresh(client: OAuthDesktopClient, token: OAuthToken, requiredScopes: [String]) throws -> OAuthToken {
+    throw GatewayError("This refresher does not support inline OAuth clients", code: .missingCredential, exitCode: 2)
+  }
 }
 
 public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
@@ -27,15 +34,22 @@ public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
     do {
       return try selectedAccessToken(profile: profile, environment: environment)
     } catch let error as GatewayError {
-      throw GatewayError("Credential resolution failed: \(profile.tokenSourceDiagnostic(environment: environment))", code: error.code, exitCode: error.exitCode)
+      throw GatewayError("Credential resolution failed: \(profile.tokenSourceDiagnostic(environment: environment)); \(error.message)", code: error.code, exitCode: error.exitCode)
     }
   }
 
   private func selectedAccessToken(profile: CredentialProfile, environment: [String: String]) throws -> String {
-    if let token = environment[profile.accessTokenEnvironmentVariable]?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
-      return token
+    let input = try MarketingCredentialInput(profile: profile, environment: environment)
+    let profile = try marketingProfilePaths(profile, environment: environment)
+    if let token = input.accessToken { return token }
+    if let json = input.tokenStoreJSON {
+      let token = try OAuthTokenStore().decode(Data(json.utf8), profile: profile)
+      guard !token.isNearExpiry(now: now()) else {
+        throw GatewayError("Inline token JSON is expired; supply replacement credentials", code: .missingCredential, exitCode: 2)
+      }
+      return token.accessToken
     }
-    guard let storePath = profile.tokenStorePath else {
+    guard let storePath = input.tokenStorePath ?? profile.tokenStorePath else {
       throw GatewayError("No environment access token or configured OAuth token store is available", code: .missingCredential, exitCode: 2)
     }
     let lock = TokenStoreRefreshLock.lock(for: storePath)
@@ -43,10 +57,17 @@ public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
     defer { lock.unlock() }
     let token = try tokenStore.read(path: storePath, profile: profile)
     guard !token.isNearExpiry(now: now()) else {
-      guard let clientPath = profile.oauthClientJSONPath, let refresher else {
+      guard profile.oauthClientJSON != nil || profile.oauthClientJSONPath != nil, let refresher else {
         throw GatewayError("OAuth token requires refresh; run auth login", code: .missingCredential, exitCode: 2)
       }
-      let refreshed = try refresher.refresh(clientPath: clientPath, token: token, requiredScopes: profile.oauthScopes)
+      let refreshed: OAuthToken
+      if let json = profile.oauthClientJSON {
+        refreshed = try refresher.refresh(client: OAuthClient().loadClient(json: json), token: token, requiredScopes: profile.oauthScopes)
+      } else if let path = profile.oauthClientJSONPath {
+        refreshed = try refresher.refresh(clientPath: path, token: token, requiredScopes: profile.oauthScopes)
+      } else {
+        throw GatewayError("OAuth application client is missing", code: .missingCredential, exitCode: 2)
+      }
       try tokenStore.write(refreshed, path: storePath, profile: profile)
       return refreshed.accessToken
     }
@@ -54,8 +75,22 @@ public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
   }
 
   public func status(profile: CredentialProfile, environment: [String: String]) -> ReaderAuthStatus {
-    let environmentTokenAvailable = !(environment[profile.accessTokenEnvironmentVariable] ?? "")
-      .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    guard let input = try? MarketingCredentialInput(profile: profile, environment: environment) else {
+      return ReaderAuthStatus(profile: profile, environmentTokenAvailable: false, tokenStoreExists: false,
+                              state: "invalid", expiresAt: nil, hasRefreshToken: false)
+    }
+    guard let profile = try? marketingProfilePaths(profile, environment: environment) else {
+      return ReaderAuthStatus(profile: profile, environmentTokenAvailable: false, tokenStoreExists: false,
+                              state: "invalid", expiresAt: nil, hasRefreshToken: false)
+    }
+    let environmentTokenAvailable = input.accessToken != nil
+    if let json = input.tokenStoreJSON {
+      let token = try? OAuthTokenStore().decode(Data(json.utf8), profile: profile)
+      let state = token.map { $0.expiry <= now() ? "expired" : ($0.isNearExpiry(now: now()) ? "near-expiry" : "ready") } ?? "invalid"
+      return ReaderAuthStatus(profile: profile, environmentTokenAvailable: false, tokenStoreExists: false,
+                              state: state, expiresAt: token?.expiry, hasRefreshToken: token?.refreshToken != nil,
+                              source: "ENVIRONMENT_JSON")
+    }
     if environmentTokenAvailable {
       return ReaderAuthStatus(
         profile: profile, environmentTokenAvailable: true,
@@ -63,9 +98,10 @@ public struct ReaderCredentialResolver: ReaderCredentialResolving, Sendable {
         state: "ready", expiresAt: nil, hasRefreshToken: false
       )
     }
-    let configuredPath = profile.tokenStorePath
+    let configuredPath = input.tokenStorePath ?? profile.tokenStorePath
     guard let path = configuredPath else {
-      return ReaderAuthStatus(profile: profile, environmentTokenAvailable: environmentTokenAvailable, tokenStoreExists: false, state: environmentTokenAvailable ? "ready" : "missing", expiresAt: nil, hasRefreshToken: false)
+      return ReaderAuthStatus(profile: profile, environmentTokenAvailable: environmentTokenAvailable, tokenStoreExists: false,
+                              state: environmentTokenAvailable ? "ready" : "missing", expiresAt: nil, hasRefreshToken: false)
     }
     let storeExists = SecureLocalFiles.pathEntryExists(path: path)
     guard storeExists else {
@@ -126,7 +162,8 @@ public struct ReaderAuthStatus: Encodable, Equatable, Sendable {
     tokenStoreExists: Bool,
     state: String,
     expiresAt: Date?,
-    hasRefreshToken: Bool
+    hasRefreshToken: Bool,
+    source: String? = nil
   ) {
     product = profile.product
     oauthScopes = profile.oauthScopes
@@ -137,8 +174,8 @@ public struct ReaderAuthStatus: Encodable, Equatable, Sendable {
     self.state = state
     self.expiresAt = expiresAt
     self.hasRefreshToken = hasRefreshToken
-    tokenSource = environmentTokenAvailable ? "ENVIRONMENT_TOKEN" : "FILE"
+    tokenSource = source ?? (environmentTokenAvailable ? "ENVIRONMENT_TOKEN" : "FILE")
     tokenEnvironmentVariable = environmentTokenAvailable ? profile.accessTokenEnvironmentVariable : nil
-    tokenStorePath = environmentTokenAvailable ? nil : profile.tokenStorePath
+    tokenStorePath = environmentTokenAvailable || source == "ENVIRONMENT_JSON" ? nil : profile.tokenStorePath
   }
 }

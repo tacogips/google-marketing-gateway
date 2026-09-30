@@ -203,6 +203,27 @@ enum SecureLocalFiles {
     return lstat(path, &metadata) == 0
   }
 
+  /// Creates private missing ancestors without traversing symbolic links.
+  static func ensurePrivateParent(ofPath path: String) throws {
+    let target = try Target(path: path)
+    var descriptor = open("/", O_RDONLY | O_DIRECTORY)
+    guard descriptor >= 0 else { throw GatewayError("Unable to open filesystem root", code: .invalidConfiguration, exitCode: 2) }
+    defer { close(descriptor) }
+    for component in target.directory {
+      var next = openat(descriptor, component, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+      if next < 0 && errno == ENOENT {
+        guard mkdirat(descriptor, component, S_IRWXU) == 0 || errno == EEXIST else {
+          throw GatewayError("Unable to create OAuth token-store directory", code: .invalidConfiguration, exitCode: 2)
+        }
+        next = openat(descriptor, component, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+      }
+      guard next >= 0 else { throw GatewayError("Configured path contains an unsafe directory", code: .invalidConfiguration, exitCode: 2) }
+      close(descriptor)
+      descriptor = next
+    }
+    try validatePrivateDirectory(descriptor)
+  }
+
   private static func validatePrivateDirectory(_ fd: Int32) throws {
     var metadata = stat()
     guard fstat(fd, &metadata) == 0, (metadata.st_mode & S_IFMT) == S_IFDIR,
