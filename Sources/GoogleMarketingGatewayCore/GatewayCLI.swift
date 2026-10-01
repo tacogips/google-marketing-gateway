@@ -1,4 +1,5 @@
 import Foundation
+import GoogleGatewayAuth
 
 public struct GoogleMarketingGatewayCLI: Sendable {
   private let mode: GatewayMode
@@ -616,8 +617,12 @@ public struct GoogleMarketingGatewayCLI: Sendable {
   private func authLogout(arguments: [String], environment: [String: String]) throws -> GatewayCommandResult {
     let flags = try parseFlags(arguments, allowedNames: ["config", "profile", "product"])
     let profile = try authProfile(flags: flags, environment: environment)
-    let deleted = try authManager.logout(profile: profile)
-    return GatewayCommandResult(exitCode: 0, stdout: try encodedJSON(LogoutOutput(profileId: profile.id, product: profile.product, removed: deleted)))
+    let input = try MarketingCredentialInput(profile: profile, environment: environment)
+    let external = input.accessToken != nil || input.tokenStoreJSON != nil || input.tokenStorePath != nil
+    let result = try GatewayLogout.perform(externalCredential: external) { try authManager.logout(profile: profile) }
+    return GatewayCommandResult(exitCode: 0, stdout: try encodedJSON(LogoutOutput(
+      profileId: profile.id, product: profile.product, removed: result.localTokenDeleted,
+      state: result.state, externalCredentialPreserved: result.externalCredentialPreserved)))
   }
 
   private func authLogin(arguments: [String], environment: [String: String]) throws -> GatewayCommandResult {
@@ -829,4 +834,6 @@ private struct LogoutOutput: Encodable {
   let profileId: String
   let product: MarketingProduct
   let removed: Bool
+  let state: String
+  let externalCredentialPreserved: Bool
 }
