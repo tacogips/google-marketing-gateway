@@ -121,7 +121,10 @@ public final class OAuthLoopbackReceiver: OAuthLoopbackReceiving, @unchecked Sen
     if let error = items.first(where: { $0.name == "error" })?.value, !error.isEmpty {
       return .providerError
     }
-    guard items.count == 2, Set(items.map(\.name)) == Set(["state", "code"]),
+    // Google may include issuer and granted-scope metadata in a successful callback.
+    let allowedParameters: Set<String> = ["state", "code", "iss", "scope"]
+    guard Set(items.map(\.name)).isSubset(of: allowedParameters),
+      items.first(where: { $0.name == "iss" }).map({ $0.value == "https://accounts.google.com" }) ?? true,
       let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty, code.utf8.count <= 8_192,
       code.utf8.allSatisfy({ $0 >= 33 && $0 != 127 }) else {
       throw GatewayError("OAuth callback validation failed", code: .invalidResponse, exitCode: 2)

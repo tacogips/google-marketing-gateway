@@ -127,6 +127,22 @@ import Testing
   }
 }
 
+@Test func callbackParserAcceptsGoogleMetadataAndRejectsInvalidIssuerOrDuplicates() throws {
+  let state = String(repeating: "s", count: 43)
+  let target = "/oauth2callback?code=authorization-code&state=\(state)"
+  let metadata = "&iss=https%3A%2F%2Faccounts.google.com&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fadwords"
+  #expect(try OAuthLoopbackReceiver.callbackCode(
+    request: "GET \(target)\(metadata) HTTP/1.1\r\n\r\n", expectedState: state
+  ) == "authorization-code")
+  for suffix in ["&iss=https%3A%2F%2Finvalid.example", "\(metadata)&scope=duplicate", "&code=duplicate"] {
+    #expect(throws: GatewayError.self) {
+      _ = try OAuthLoopbackReceiver.callbackCode(
+        request: "GET \(target)\(suffix) HTTP/1.1\r\n\r\n", expectedState: state
+      )
+    }
+  }
+}
+
 @Test func loopbackReceiverContinuesAfterInvalidCallback() async throws {
   let receiver = try OAuthLoopbackReceiver()
   let state = String(repeating: "s", count: 43)
