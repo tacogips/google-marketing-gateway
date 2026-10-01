@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import GoogleGatewayAuth
 
 public protocol OAuthLoopbackReceiving: Sendable {
   var redirectURI: String { get }
@@ -114,19 +115,14 @@ public final class OAuthLoopbackReceiver: OAuthLoopbackReceiving, @unchecked Sen
       throw GatewayError("OAuth callback is invalid", code: .invalidResponse, exitCode: 2)
     }
     let items = URLComponents(string: "http://callback/?\(targetParts[1])")?.queryItems ?? []
-    guard !items.isEmpty, items.count == Set(items.map(\.name)).count,
-      let state = items.first(where: { $0.name == "state" })?.value, state == expectedState else {
+    let callback: OAuthCallback
+    do {
+      callback = try OAuthCallback.validated(queryItems: items, expectedState: expectedState)
+    } catch {
       throw GatewayError("OAuth callback validation failed", code: .invalidResponse, exitCode: 2)
     }
-    if let error = items.first(where: { $0.name == "error" })?.value, !error.isEmpty {
-      return .providerError
-    }
-    // Google may include issuer and granted-scope metadata in a successful callback.
-    let allowedParameters: Set<String> = ["state", "code", "iss", "scope"]
-    guard Set(items.map(\.name)).isSubset(of: allowedParameters),
-      items.first(where: { $0.name == "iss" }).map({ $0.value == "https://accounts.google.com" }) ?? true,
-      let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty, code.utf8.count <= 8_192,
-      code.utf8.allSatisfy({ $0 >= 33 && $0 != 127 }) else {
+    if callback.error != nil { return .providerError }
+    guard let code = callback.code else {
       throw GatewayError("OAuth callback validation failed", code: .invalidResponse, exitCode: 2)
     }
     return .code(code)
