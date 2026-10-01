@@ -406,8 +406,9 @@ client. Inline token JSON is immutable; replace it when expired.
 The reader, writer, admin, and deleter all accept `auth login`, `auth status`, and
 `auth logout`. Auth profiles must match the executable capability. `--profile`
 can be omitted when the config contains exactly one profile for that capability.
-Application registration and config are still required for browser login; the
-shared distribution client integration is unfinished.
+Browser login uses the shared OAuth client configured through Service gateway
+when no explicit product client is selected. Existing config/profile overrides
+remain supported.
 
 OAuth application JSON supplied through `OAUTH_CLIENT_JSON` stays in memory and
 uses the same desktop-client validation as `OAUTH_CLIENT_PATH`. Login and refresh
@@ -430,8 +431,9 @@ Saved credentials live under
 `$XDG_STATE_HOME/google-marketing-gateway/credentials/<product>/<role>/<id>.json`,
 or `~/.local/state/google-marketing-gateway/credentials/...` when unset.
 Parents are created privately before authorization; stored tokens use mode 0600.
-A registered desktop application client is still required until a distribution
-client is supplied. Google Ads requests also require the developer token.
+A registered Desktop or Web OAuth client is required. The shared Service client
+is used by default; product client settings override it. Google Ads requests also
+require the developer token.
 
 Fresh external token values or token stores remain usable without login or
 application input. For example, the reader's `google-ads accessible-customers
