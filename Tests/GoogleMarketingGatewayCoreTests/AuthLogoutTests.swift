@@ -30,3 +30,16 @@ import Testing
     }
   }
 }
+
+@Test func marketingLogoutWithMissingStateDirectoryIsIdempotent() async throws {
+  let root = URL(fileURLWithPath: "/private/tmp").appendingPathComponent(UUID().uuidString)
+  let environment = ["XDG_STATE_HOME": root.path, "XDG_CONFIG_HOME": root.path]
+  for mode in GatewayMode.allCases {
+    for _ in 0..<2 {
+      let result = await GoogleMarketingGatewayCLI(mode: mode).run(arguments: ["auth", "logout"], environment: environment)
+      #expect(result.exitCode == 0)
+      #expect(result.stdout.contains("LOGGED_OUT"))
+    }
+  }
+  #expect(!FileManager.default.fileExists(atPath: root.path))
+}
