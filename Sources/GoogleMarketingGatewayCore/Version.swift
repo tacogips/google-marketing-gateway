@@ -1,3 +1,3 @@
 public enum GoogleMarketingGatewayVersion {
-  public static let current = "0.1.4"
+  public static let current = "0.1.5"
 }
