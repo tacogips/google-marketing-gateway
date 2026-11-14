@@ -1,0 +1,13 @@
+{
+  "profiles": [
+    {
+      "id": "analytics-data-reader",
+      "product": "analytics-data",
+      "capability": "reader",
+      "oauthScopes": ["https://www.googleapis.com/auth/analytics.readonly"],
+      "accessTokenEnvironmentVariable": "ANALYTICS_TEST_ACCESS_TOKEN",
+      "oauthClientJSONPath": "absent-client.json",
+      "tokenStorePath": "absent-token.json"
+    }
+  ]
+}

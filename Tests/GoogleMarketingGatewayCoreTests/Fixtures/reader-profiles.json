@@ -1,0 +1,32 @@
+{
+  "profiles": [
+    {
+      "id": "adsense-reader",
+      "product": "adsense",
+      "capability": "reader",
+      "oauthScopes": [
+        "https://www.googleapis.com/auth/adsense.readonly"
+      ],
+      "accessTokenEnvironmentVariable": "ADSENSE_TEST_ACCESS_TOKEN"
+    },
+    {
+      "id": "admob-reader",
+      "product": "admob",
+      "capability": "reader",
+      "oauthScopes": [
+        "https://www.googleapis.com/auth/admob.readonly",
+        "https://www.googleapis.com/auth/admob.report"
+      ],
+      "accessTokenEnvironmentVariable": "ADMOB_TEST_ACCESS_TOKEN"
+    },
+    {
+      "id": "admob-report-reader",
+      "product": "admob",
+      "capability": "reader",
+      "oauthScopes": [
+        "https://www.googleapis.com/auth/admob.report"
+      ],
+      "accessTokenEnvironmentVariable": "ADMOB_REPORT_TEST_ACCESS_TOKEN"
+    }
+  ]
+}
