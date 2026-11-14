@@ -1,0 +1,18 @@
+{
+  "profiles": [
+    {
+      "id": "fixture-environment-only",
+      "product": "analytics-data",
+      "capability": "reader",
+      "oauthScopes": ["https://www.googleapis.com/auth/analytics.readonly"],
+      "accessTokenEnvironmentVariable": "FIXTURE_ACCESS_TOKEN"
+    },
+    {
+      "id": "fixture-missing-store",
+      "product": "analytics-data",
+      "capability": "reader",
+      "oauthScopes": ["https://www.googleapis.com/auth/analytics.readonly"],
+      "accessTokenEnvironmentVariable": "FIXTURE_MISSING_TOKEN"
+    }
+  ]
+}

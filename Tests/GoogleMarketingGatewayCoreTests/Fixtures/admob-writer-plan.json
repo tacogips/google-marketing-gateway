@@ -1,0 +1,1 @@
+{"profiles":[{"id":"fixture-admob-writer","product":"admob","capability":"writer","oauthScopes":["https://www.googleapis.com/auth/admob.monetization"],"accessTokenEnvironmentVariable":"ADMOB_WRITER_PLAN_TEST_TOKEN"}]}
